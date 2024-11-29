@@ -26,5 +26,7 @@ Compile via CMake:
 ```bash
 mkdir build
 cd build
-cmake ..
+cmake ..            # create makefile via CMake
+make                # run makefile
+./radiance_cascades # run the programme
 ```

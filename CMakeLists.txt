@@ -9,7 +9,7 @@ project(radiance_cascades)
 
 find_package(raylib 3.0 REQUIRED)
 
-add_executable(${PROJECT_NAME} src/main.cpp)
+add_executable(${PROJECT_NAME} src/main.cpp src/game.cpp)
 target_link_libraries(${PROJECT_NAME} raylib)
 
 if (APPLE)

@@ -1,14 +1,23 @@
 #include "raylib.h"
+#include "game.h"
+
+#define SCREEN_WIDTH  800
+#define SCREEN_HEIGHT 600 
+
+#define GLSL_VERSION 330
 
 int main() {
-  InitWindow(800, 450, "raylib [core] example - basic window");
+  InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Radiance Cascades");
+  
+  Game game;
 
+  game.setup();
   while (!WindowShouldClose())
   {
-      BeginDrawing();
-          ClearBackground(RAYWHITE);
-          DrawText("Congrats! You created your first window!", 190, 200, 20, LIGHTGRAY);
-      EndDrawing();
+    game.update();
+    BeginDrawing();
+      game.render();
+    EndDrawing();
   }
 
   CloseWindow();
