@@ -1,5 +1,4 @@
 #include "raylib.h"
-#include <iostream>
 
 int main() {
   InitWindow(800, 450, "raylib [core] example - basic window");
@@ -13,6 +12,4 @@ int main() {
   }
 
   CloseWindow();
-
-  return 0;
 }
