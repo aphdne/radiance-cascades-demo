@@ -12,9 +12,10 @@ void Game::update() {
   if (IsKeyDown(KEY_S)) boxPosition.y += 80.0f * GetFrameTime();
 
   boxSize = 50 + (sin(GetTime() * 2) * 2);
+  boxSizeV = { boxSize, boxSize };
 }
 
 void Game::render() {
   ClearBackground(RAYWHITE);
-  DrawRectangleV(boxPosition, Vector2(boxSize, boxSize), MAROON);
+  DrawRectangleV(boxPosition, boxSizeV, MAROON);
 }

@@ -17,6 +17,7 @@ class Game {
   private:
     Vector2 boxPosition;
     float boxSize;
+    Vector2 boxSizeV;
 };
 
 #endif /* GAME_H */
