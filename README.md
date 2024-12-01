@@ -4,8 +4,9 @@ Lorem ipsum (/ˌlɔː.rəm ˈɪp.səm/ LOR-əm IP-səm) is a dummy or placeholde
 
 ## Requirements
 
-- A C++11 (or higher) compiler
 - CMake
+    - A C++11 (or higher) compiler
+- Raylib 
 
 ## Setup (Unix-like)
 

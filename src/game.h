@@ -6,7 +6,7 @@
 #include <iostream>
 
 #define SCREEN_WIDTH  800
-#define SCREEN_HEIGHT 600 
+#define SCREEN_HEIGHT 600
 
 class Game {
   public:
@@ -17,7 +17,8 @@ class Game {
   private:
     Vector2 boxPosition;
     float boxSize;
-    Vector2 boxSizeV;
+    Shader shader;
+    float time;
 };
 
 #endif /* GAME_H */
