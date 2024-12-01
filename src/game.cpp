@@ -3,8 +3,7 @@
 void Game::setup() {
   boxPosition = { (float)SCREEN_WIDTH/2, (float)SCREEN_HEIGHT/2 };
   boxSize = 50;
-
-  shader = LoadShader(0, TextFormat("res/shaders/rainbow.frag", 330));
+  shader = LoadShader(0, TextFormat("res/shaders/rainbow.frag", GLSL_VERSION));
 }
 
 void Game::update() {

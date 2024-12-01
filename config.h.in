@@ -1,0 +1,18 @@
+#define VERSION_MAJOR @radiance_cascades_VERSION_MAJOR@
+#define VERSION_MINOR @radiance_cascades_VERSION_MINOR@
+#define VERSION_PATCH @radiance_cascades_VERSION_PATCH@
+
+#if @radiance_cascades_VERSION_TWEAK@ == 0
+  #define VERSION_STAGE "a" // alpha
+#elif @radiance_cascades_VERSION_TWEAK@ <= 1
+  #define VERSION_STAGE "b" // beta
+#else
+  #define VERSION_STAGE "r" // release
+#endif
+
+#define VERSION "@radiance_cascades_VERSION_MAJOR@.@radiance_cascades_VERSION_MINOR@_@radiance_cascades_VERSION_PATCH@"
+
+#define SCREEN_WIDTH  800
+#define SCREEN_HEIGHT 600
+
+#define GLSL_VERSION 330

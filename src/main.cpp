@@ -1,13 +1,12 @@
 #include "raylib.h"
 #include "game.h"
 
-#define SCREEN_WIDTH  800
-#define SCREEN_HEIGHT 600
-
-#define GLSL_VERSION 330
-
 int main() {
-  InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Radiance Cascades");
+  std::string title = "Radiance Cascades ";
+  title += VERSION_STAGE;
+  title += VERSION;
+
+  InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, title.c_str());
 
   Game game;
 
