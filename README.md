@@ -1,8 +1,8 @@
 # Radiance Cascades Demo
 
 1. [Requirements](#requirements)
-2. [Setup (macOS & Linux)](#setup-\(macOS-&-Linux\))
-3. [Setup (Windows)](#setup-\(windows\))
+2. [Setup (macOS & Linux)](#setup-(macOS-&-Linux))
+3. [Setup (Windows)](#setup-(windows))
 
 Lorem ipsum (/ˌlɔː.rəm ˈɪp.səm/ LOR-əm IP-səm) is a dummy or placeholder text commonly used in graphic design, publishing, and web development to fill empty spaces in a layout that do not yet have content.
 
