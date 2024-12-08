@@ -1,10 +1,11 @@
 #version 330 core
 
-in vec2 texCoords;
-
-out vec4 fragColor;
+in vec2 fragTexCoord;
+in vec4 fragColor;
 
 uniform float uTime;
+
+out vec4 finalColor;
 
 vec3 hsv2rgb(vec3 c) {
   vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
@@ -13,5 +14,5 @@ vec3 hsv2rgb(vec3 c) {
 }
 
 void main() {
-  fragColor = vec4(hsv2rgb(vec3(uTime, 1.0f, 1.0f)), 1.0f);
+  finalColor = vec4(fragTexCoord.x, fragTexCoord.y, 0.0, 1.0); //vec4(hsv2rgb(vec3(uTime, 1.0f, 1.0f)), 1.0f);
 }

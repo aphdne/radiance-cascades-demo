@@ -17,6 +17,9 @@ class Game {
     float boxSize;
     Shader shader;
     float time;
+
+    bool debug;
+    Font font;
 };
 
 #endif /* GAME_H */

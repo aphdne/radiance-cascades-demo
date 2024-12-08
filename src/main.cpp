@@ -7,6 +7,7 @@ int main() {
   title += VERSION;
 
   InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, title.c_str());
+  SetTargetFPS(144);
 
   Game game;
 
