@@ -14,9 +14,12 @@ int main() {
   game.setup();
   while (!WindowShouldClose())
   {
+    game.processKeyboardInput();
+    game.processMouseInput();
     game.update();
     BeginDrawing();
       game.render();
+      game.renderUI();
     EndDrawing();
   }
 

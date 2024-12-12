@@ -33,8 +33,8 @@ sudo pacman -S raylib
 Compile via CMake:
 
 ```bash
-# either run the convenience build-n-run script
-./run.sh
+# either run the convenience build script (with the `-r` flag to run the binary after compilation)
+./build.sh -r
 
 # or build it manually
 mkdir build

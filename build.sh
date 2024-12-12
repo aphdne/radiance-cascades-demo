@@ -8,4 +8,7 @@ pushd build
 cmake ..
 make
 popd
-./build/radiance_cascades
+
+while getopts "r:" arg; do
+  ./build/radiance_cascades
+done
