@@ -3,8 +3,9 @@
 void Game::setup() {
   boxPosition = { (float)SCREEN_WIDTH/2, (float)SCREEN_HEIGHT/2 };
   boxSize = 50;
-  shader = LoadShader(0, TextFormat("res/shaders/rainbow.frag", GLSL_VERSION));
   debug = false;
+
+  shader = LoadShader(0, TextFormat("res/shaders/rainbow.frag", GLSL_VERSION));
 
   brush = LoadImage("res/brush_circle.png");
   brushTex = LoadTextureFromImage(brush);
@@ -33,19 +34,11 @@ void Game::update() {
   SetShaderValue(shader, GetShaderLocation(shader, "uTime"), &time, SHADER_UNIFORM_FLOAT);
 
   if (IsMouseButtonDown(0)) {
-    for (int x = 0; x < brush.width*BRUSH_SCALE; x++) {
-      for (int y = 0; y < brush.height*BRUSH_SCALE; y++) {
-        Color brushcol = GetImageColor(brush,  x/BRUSH_SCALE, y/BRUSH_SCALE);
-        Color bgcol    = GetImageColor(canvas, x/BRUSH_SCALE, y/BRUSH_SCALE);
-        if (brushcol.a != 0) {
-          ImageDrawPixel(&canvas,
-                         GetMouseX() - brush.width/2*BRUSH_SCALE + x,
-                         GetMouseY() - brush.height/2*BRUSH_SCALE + y,
-                         //ColorAlphaBlend(bgcol, brushcol, BLACK)); // alpha doesnt work!!
-                         ColorAlphaBlend(brushcol, bgcol, BLACK));
-        }
-      }
-    }
+    ImageDraw(&canvas,
+              brush,
+              (Rectangle){ 0, 0, canvas.width, canvas.height },
+              (Rectangle){ (float)GetMouseX() - brush.width/2*BRUSH_SCALE, (float)GetMouseY() - brush.height/2*BRUSH_SCALE, brush.width*BRUSH_SCALE, brush.height*BRUSH_SCALE },
+              BLACK);
     UnloadTexture(canvasTex);
     canvasTex = LoadTextureFromImage(canvas);
   }

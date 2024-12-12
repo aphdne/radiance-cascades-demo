@@ -19,7 +19,6 @@ class Game {
     float time;
 
     bool debug;
-    Font font;
     Image brush;
     Texture2D brushTex;
     Image canvas;

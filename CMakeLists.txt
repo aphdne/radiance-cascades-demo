@@ -1,11 +1,11 @@
-cmake_minimum_required(VERSION 3.31)
+cmake_minimum_required(VERSION 3.25)
 
 set(CMAKE_CXX_STANDARD          23)
 set(CMAKE_CXX_STANDARD_REQUIRED NO)
 set(CMAKE_CXX_EXTENSIONS        OFF)
 
 # major, minor, patch, and _STAGE_ (0 = alpha, 1 = beta, 2 = gamma/release)
-project(radiance_cascades VERSION 0.5.1.0)
+project(radiance_cascades VERSION 0.5.2.0)
 
 configure_file(config.h.in config.h)
 
