@@ -12,7 +12,10 @@
 
 #define VERSION "@radiance_cascades_VERSION_MAJOR@.@radiance_cascades_VERSION_MINOR@_@radiance_cascades_VERSION_PATCH@"
 
+#define GLSL_VERSION 330
+
 #define SCREEN_WIDTH  800
 #define SCREEN_HEIGHT 600
 
-#define GLSL_VERSION 330
+#define BRUSH_SCALE 0.5
+#define BACKGROUND_COLOR BEIGE

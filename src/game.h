@@ -20,6 +20,10 @@ class Game {
 
     bool debug;
     Font font;
+    Image brush;
+    Texture2D brushTex;
+    Image canvas;
+    Texture2D canvasTex;
 };
 
 #endif /* GAME_H */
