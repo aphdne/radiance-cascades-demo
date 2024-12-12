@@ -14,8 +14,8 @@ int main() {
   game.setup();
   while (!WindowShouldClose())
   {
-    game.update();
     BeginDrawing();
+    game.update();
       game.render();
     EndDrawing();
   }

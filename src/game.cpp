@@ -4,16 +4,14 @@ void Game::setup() {
   boxPosition = { (float)SCREEN_WIDTH/2, (float)SCREEN_HEIGHT/2 };
   boxSize = 50;
   shader = LoadShader(0, TextFormat("res/shaders/rainbow.frag", GLSL_VERSION));
+  debug = false;
 
   brush = LoadImage("res/brush_circle.png");
-  brushTex = LoadTexture("res/brush_circle.png");
-  debug = false;
+  brushTex = LoadTextureFromImage(brush);
 
   canvas = GenImageColor(SCREEN_WIDTH, SCREEN_HEIGHT, BACKGROUND_COLOR);
   canvasTex = LoadTextureFromImage(canvas);
 }
-
-
 
 void Game::update() {
   if (IsKeyPressed(KEY_F3)) debug = !debug;
@@ -35,9 +33,6 @@ void Game::update() {
   SetShaderValue(shader, GetShaderLocation(shader, "uTime"), &time, SHADER_UNIFORM_FLOAT);
 
   if (IsMouseButtonDown(0)) {
-    // std::cout << GetMouseX() << " -> " << GetMouseX() - brush.width/2*BRUSH_SCALE << std::endl;
-    // std::cout << GetMouseY() << " -> " << GetMouseY() - brush.width/2*BRUSH_SCALE << std::endl;
-    BeginBlendMode(BLEND_ALPHA);
     for (int x = 0; x < brush.width*BRUSH_SCALE; x++) {
       for (int y = 0; y < brush.height*BRUSH_SCALE; y++) {
         Color brushcol = GetImageColor(brush,  x/BRUSH_SCALE, y/BRUSH_SCALE);
@@ -46,12 +41,11 @@ void Game::update() {
           ImageDrawPixel(&canvas,
                          GetMouseX() - brush.width/2*BRUSH_SCALE + x,
                          GetMouseY() - brush.height/2*BRUSH_SCALE + y,
-                         // ColorAlphaBlend(bgcol, brushcol, BLACK)); // alpha doesnt work!!
+                         //ColorAlphaBlend(bgcol, brushcol, BLACK)); // alpha doesnt work!!
                          ColorAlphaBlend(brushcol, bgcol, BLACK));
         }
       }
     }
-    EndBlendMode();
     UnloadTexture(canvasTex);
     canvasTex = LoadTextureFromImage(canvas);
   }

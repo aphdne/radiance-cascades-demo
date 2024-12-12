@@ -14,5 +14,6 @@ vec3 hsv2rgb(vec3 c) {
 }
 
 void main() {
-  finalColor = vec4(fragTexCoord.x, fragTexCoord.y, 0.0, 1.0); //vec4(hsv2rgb(vec3(uTime, 1.0f, 1.0f)), 1.0f);
+  //finalColor = vec4(fragTexCoord.x, fragTexCoord.y, 0.0, 1.0);
+  finalColor = vec4(hsv2rgb(vec3(uTime, 1.0f, 1.0f)), 1.0f);
 }
