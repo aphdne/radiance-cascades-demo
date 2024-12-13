@@ -100,7 +100,7 @@ void Game::processMouseInput() {
       ImageDraw(&canvas,
                 brush,
                 (Rectangle){ 0, 0, (float)canvas.width, (float)canvas.height },
-                (Rectangle){ GetMouseX() - brush.width/2*BRUSH_SCALE, GetMouseY() - brush.height/2*BRUSH_SCALE, brush.width*BRUSH_SCALE, brush.height*BRUSH_SCALE },
+                (Rectangle){ static_cast<float>(GetMouseX() - brush.width/2*BRUSH_SCALE), static_cast<float>(GetMouseY() - brush.height/2*BRUSH_SCALE), static_cast<float>(brush.width*BRUSH_SCALE), static_cast<float>(brush.height*BRUSH_SCALE) },
                 BLACK);
       UnloadTexture(canvasTex);
       canvasTex = LoadTextureFromImage(canvas);
