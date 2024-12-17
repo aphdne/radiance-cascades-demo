@@ -7,18 +7,11 @@
 #include <iostream>
 #include <vector>
 
-enum Tool {
-  BRUSH,
-  BOX
-};
-
 class Game {
   public:
     void setup();
     void update();
     void render();
-
-    // functions purely for organisation
     void renderUI();
     void processKeyboardInput();
     void processMouseInput();
@@ -26,11 +19,14 @@ class Game {
   private:
     Vector2 boxPosition;
     float boxSize;
-    Tool tool;
-    Shader shader;
+    enum {
+      BRUSH,
+      BOX
+    } tool;
+    Shader rainbowShader;
+    Shader maskShader;
     bool debug;
     float time;
-
     Image brush;
     Texture2D brushTex;
     Image canvas;

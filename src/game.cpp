@@ -6,7 +6,8 @@ void Game::setup() {
   debug = false;
   tool = BRUSH;
 
-  shader = LoadShader(0, TextFormat("res/shaders/rainbow.frag", GLSL_VERSION));
+  rainbowShader = LoadShader(0, TextFormat("res/shaders/rainbow.frag", GLSL_VERSION));
+  maskShader = LoadShader(0, TextFormat("res/shaders/mask.frag", GLSL_VERSION));
 
   brush = LoadImage("res/brush_circle.png");
   brushTex = LoadTextureFromImage(brush);
@@ -16,16 +17,28 @@ void Game::setup() {
 }
 
 void Game::update() {
-  boxSize = 50 + (sin(GetTime() * 2) * 2);
   time = GetTime();
-  SetShaderValue(shader, GetShaderLocation(shader, "uTime"), &time, SHADER_UNIFORM_FLOAT);
+  SetShaderValue(rainbowShader, GetShaderLocation(rainbowShader, "uTime"), &time, SHADER_UNIFORM_FLOAT);
+
+
+  Vector2 resolution = { SCREEN_WIDTH, SCREEN_HEIGHT };
+  SetShaderValue(maskShader, GetShaderLocation(maskShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
+
+
+  Vector2 mousePos   = { static_cast<float>(GetMouseX()),  static_cast<float>(GetMouseY()) };
+  SetShaderValue(maskShader, GetShaderLocation(maskShader, "uMousePos"), &mousePos, SHADER_UNIFORM_VEC2);
 }
 
 void Game::render() {
   ClearBackground(PINK);
-  DrawTexture(canvasTex, 0, 0, WHITE);
 
-  BeginShaderMode(shader);
+  BeginShaderMode(maskShader);
+    // SetShaderValueTexture() has to be called while the shader is enabled
+    SetShaderValueTexture(maskShader, GetShaderLocation(maskShader, "uOcclusionMask"), canvasTex);
+    DrawTexture(canvasTex, 0, 0, WHITE);
+  EndShaderMode();
+
+  BeginShaderMode(rainbowShader);
     DrawRectanglePro((Rectangle){ boxPosition.x, boxPosition.y, boxSize, boxSize },
                      (Vector2){ boxSize/2, boxSize/2 },
                      0,
@@ -34,6 +47,10 @@ void Game::render() {
 
   for (Rectangle* r : walls) {
     DrawRectanglePro(*r, (Vector2){ 0, 0 }, 0, BLACK);
+    // DrawLine(GetMouseX(), GetMouseY(), r->x, r->y, RED);
+    // DrawLine(GetMouseX(), GetMouseY(), r->x+r->width, r->y, RED);
+    // DrawLine(GetMouseX(), GetMouseY(), r->x, r->y+r->height, RED);
+    // DrawLine(GetMouseX(), GetMouseY(), r->x+r->width, r->y+r->height, RED);
   }
 
   if (tool == BRUSH) {
@@ -105,8 +122,7 @@ void Game::processMouseInput() {
       UnloadTexture(canvasTex);
       canvasTex = LoadTextureFromImage(canvas);
     }
-  }
-  if (tool == BOX) {
+  } else if (tool == BOX) {
     if (IsMouseButtonPressed(0)) {
       boxToolInfo.rect.x = GetMouseX();
       boxToolInfo.rect.y = GetMouseY();
@@ -117,8 +133,8 @@ void Game::processMouseInput() {
     }
     if (IsMouseButtonReleased(0)) {
       Rectangle* r = new Rectangle;
-      r->x      = boxToolInfo.rect.x;
-      r->y      = boxToolInfo.rect.y;
+      r->x      = boxToolInfo.rect.x-1; // there's a one-pixel discrepancy for some reason..?
+      r->y      = boxToolInfo.rect.y-1; // there's a one-pixel discrepancy for some reason..?
       r->width  = boxToolInfo.rect.width;
       r->height = boxToolInfo.rect.height;
       walls.push_back(r);

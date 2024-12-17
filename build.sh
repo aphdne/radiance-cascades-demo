@@ -9,6 +9,6 @@ cmake ..
 make
 popd
 
-while getopts "r:" arg; do
+while getopts "r" arg; do
   ./build/radiance_cascades
 done
