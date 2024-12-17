@@ -29,7 +29,7 @@ class Game {
     } box;
 
     Shader rainbowShader;
-    Shader maskShader;
+    Shader lightingShader;
 
     bool debug;
     float time;
@@ -44,6 +44,8 @@ class Game {
       Image img;
       Texture2D tex;
     } canvas;
+
+    std::vector<Light> lights;
 };
 
 #endif /* GAME_H */

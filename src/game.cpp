@@ -6,36 +6,56 @@ Game::Game() {
   debug = false;
 
   rainbowShader = LoadShader(0, TextFormat("res/shaders/rainbow.frag", GLSL_VERSION));
-  maskShader = LoadShader(0, TextFormat("res/shaders/mask.frag", GLSL_VERSION));
+  lightingShader = LoadShader(0, TextFormat("res/shaders/lighting.frag", GLSL_VERSION));
 
   brush.img = LoadImage("res/brush_circle.png");
   brush.tex = LoadTextureFromImage(brush.img);
   brush.scale = 0.25;
 
-  //canvas.img = GenImageColor(SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
   canvas.img = LoadImage("res/maze.png");
   canvas.tex = LoadTextureFromImage(canvas.img);
+
+  int N = 4;       // no. of lights
+  float d = 256.0; // distance from centre
+  for (float i = 0; i < N; i++) {
+    float t = (i+1) * (PI*2/N) + 0.1;
+    Light l;
+    l.position = (Vector2){ SCREEN_WIDTH/2 + std::sin(t) * d, SCREEN_HEIGHT/2 + std::cos(t) * d};
+    l.color    = (Vector3){ std::sin(t), std::cos(t), 1.0 };
+    l.size     = 600;
+    lights.push_back(l);
+  }
 }
 
 void Game::update() {
   time = GetTime();
   SetShaderValue(rainbowShader, GetShaderLocation(rainbowShader, "uTime"), &time, SHADER_UNIFORM_FLOAT);
-  SetShaderValue(maskShader,    GetShaderLocation(maskShader, "uTime"),    &time, SHADER_UNIFORM_FLOAT);
+  SetShaderValue(lightingShader,    GetShaderLocation(lightingShader, "uTime"),    &time, SHADER_UNIFORM_FLOAT);
 
   Vector2 resolution = { SCREEN_WIDTH, SCREEN_HEIGHT };
-  SetShaderValue(maskShader, GetShaderLocation(maskShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
+  SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
 
-  SetShaderValue(maskShader, GetShaderLocation(maskShader, "uLightPos"), &box.position, SHADER_UNIFORM_VEC2);
+  SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uLightPos"), &box.position, SHADER_UNIFORM_VEC2);
 }
 
 void Game::render() {
   ClearBackground(PINK);
 
-  BeginShaderMode(maskShader);
+  BeginShaderMode(lightingShader);
     // <!> SetShaderValueTexture() has to be called while the shader is enabled
-    SetShaderValueTexture(maskShader, GetShaderLocation(maskShader, "uOcclusionMask"), canvas.tex);
+    SetShaderValueTexture(lightingShader, GetShaderLocation(lightingShader, "uOcclusionMask"), canvas.tex);
     DrawTexture(canvas.tex, 0, 0, WHITE);
   EndShaderMode();
+
+  for (int i = 0; i < lights.size(); i++) {
+    SetShaderValue(lightingShader, GetShaderLocation(lightingShader, TextFormat("lights[%i].position", i)), &lights[i].position, SHADER_UNIFORM_VEC2);
+    SetShaderValue(lightingShader, GetShaderLocation(lightingShader, TextFormat("lights[%i].color",    i)), &lights[i].color,    SHADER_UNIFORM_VEC3);
+    SetShaderValue(lightingShader, GetShaderLocation(lightingShader, TextFormat("lights[%i].size",     i)), &lights[i].size,     SHADER_UNIFORM_FLOAT);
+    // DrawRectanglePro((Rectangle){ lights[i].position.x, lights[i].position.y, lights[i].size, lights[i].size },
+    //                  (Vector2){ lights[i].size/2, lights[i].size/2 },
+    //                  0,
+    //                  (Color){ lights[i].color.x*255, lights[i].color.y*255, lights[i].color.z*255, 255 });
+   }
 
   // BeginShaderMode(rainbowShader);
   //   DrawRectanglePro((Rectangle){ box.position.x, box.position.y, box.size, box.size },
