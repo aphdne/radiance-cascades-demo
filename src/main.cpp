@@ -9,10 +9,10 @@ int main() {
 
   InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, title.c_str());
   SetTargetFPS(144);
+  SetTraceLogLevel(LOG_ERROR);
 
   Game game;
 
-  game.setup();
   while (!WindowShouldClose())
   {
     game.processKeyboardInput();

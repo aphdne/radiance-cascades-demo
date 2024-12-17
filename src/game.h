@@ -1,15 +1,21 @@
 #ifndef GAME_H
 #define GAME_H
 
-#include "raylib.h"
-#include "config.h"
 #include <math.h>
 #include <iostream>
 #include <vector>
+#include "raylib.h"
+#include "config.h"
+
+struct Light {
+  Vector2 position;
+  Vector3 color;
+  float size; // in pixels
+};
 
 class Game {
   public:
-    void setup();
+    Game();
     void update();
     void render();
     void renderUI();
@@ -17,28 +23,27 @@ class Game {
     void processMouseInput();
 
   private:
-    Vector2 boxPosition;
-    float boxSize;
-    enum {
-      BRUSH,
-      BOX
-    } tool;
+    struct {
+      Vector2 position;
+      float   size;
+    } box;
+
     Shader rainbowShader;
     Shader maskShader;
+
     bool debug;
     float time;
-    Image brush;
-    Texture2D brushTex;
-    Image canvas;
-    Texture2D canvasTex;
 
     struct {
-      Rectangle rect;
-      ushort x;
-      ushort y;
-    } boxToolInfo;
+      Image     img;
+      Texture2D tex;
+      float     scale;
+    } brush;
 
-    std::vector<Rectangle*> walls;
+    struct {
+      Image img;
+      Texture2D tex;
+    } canvas;
 };
 
 #endif /* GAME_H */
