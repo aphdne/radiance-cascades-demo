@@ -5,6 +5,7 @@
 #include <iostream>
 #include <vector>
 #include "raylib.h"
+#include "raymath.h"
 #include "config.h"
 
 struct Light {
@@ -23,16 +24,23 @@ class Game {
     void processMouseInput();
 
   private:
-    struct {
-      Vector2 position;
-      float   size;
-    } box;
-
     Shader rainbowShader;
     Shader lightingShader;
 
     bool debug;
     float time;
+
+    std::vector<Light> lights;
+
+    enum {
+      DRAWING,
+      LIGHTING
+    } mode;
+
+    struct {
+      Vector2 position;
+      float   size;
+    } box;
 
     struct {
       Image     img;
@@ -44,8 +52,6 @@ class Game {
       Image img;
       Texture2D tex;
     } canvas;
-
-    std::vector<Light> lights;
 };
 
 #endif /* GAME_H */

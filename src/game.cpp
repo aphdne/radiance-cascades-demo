@@ -3,7 +3,8 @@
 Game::Game() {
   box.position = { (float)SCREEN_WIDTH/2, (float)SCREEN_HEIGHT/2 };
   box.size = 20;
-  debug = false;
+  debug = true;
+  mode = DRAWING;
 
   rainbowShader = LoadShader(0, TextFormat("res/shaders/rainbow.frag", GLSL_VERSION));
   lightingShader = LoadShader(0, TextFormat("res/shaders/lighting.frag", GLSL_VERSION));
@@ -35,7 +36,8 @@ void Game::update() {
   Vector2 resolution = { SCREEN_WIDTH, SCREEN_HEIGHT };
   SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
 
-  SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uLightPos"), &box.position, SHADER_UNIFORM_VEC2);
+  int lightsAmount = lights.size();
+  SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uLightsAmount"), &lightsAmount, SHADER_UNIFORM_INT);
 }
 
 void Game::render() {
@@ -64,27 +66,36 @@ void Game::render() {
   //                    MAROON);
   // EndShaderMode();
 
-  DrawTextureEx(brush.tex,
-                (Vector2){ (float)(GetMouseX() - brush.img.width/2*brush.scale),
-                           (float)(GetMouseY() - brush.img.height/2*brush.scale) },
-                0.0,
-                brush.scale,
-                BLACK);
+  if (mode == DRAWING)
+    DrawTextureEx(brush.tex,
+                  (Vector2){ (float)(GetMouseX() - brush.img.width/2*brush.scale),
+                             (float)(GetMouseY() - brush.img.height/2*brush.scale) },
+                  0.0,
+                  brush.scale,
+                  BLACK);
 }
 
 void Game::renderUI() {
   if (debug) {
-    DrawText(TextFormat("%i FPS",    GetFPS()), 0, 8, 1, BLACK);
+    DrawText(TextFormat("%i FPS", GetFPS()), 0, 0, 1, GREEN);
+    DrawText(TextFormat("%i lights", lights.size()), 0, 8, 1, GREEN);
   }
 }
 
 void Game::processKeyboardInput() {
   if (IsKeyPressed(KEY_F3)) debug = !debug;
   if (IsKeyPressed(KEY_C)) {
-    std::cout << "Clearing canvas." << std::endl;
-    canvas.img = GenImageColor(SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
-    UnloadTexture(canvas.tex);
-    canvas.tex = LoadTextureFromImage(canvas.img);
+    if (mode == DRAWING) {
+      std::cout << "Clearing canvas." << std::endl;
+      canvas.img = GenImageColor(SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
+      UnloadTexture(canvas.tex);
+      canvas.tex = LoadTextureFromImage(canvas.img);
+    } else if (mode == LIGHTING) {
+      std::cout << "Clearing lights." << std::endl;
+      for (int i = lights.size(); i > 0; i--) {
+        lights.erase(lights.begin() + i);
+      }
+    }
   }
   if (IsKeyPressed(KEY_V)) {
     std::cout << "Mazing canvas." << std::endl;
@@ -97,32 +108,51 @@ void Game::processKeyboardInput() {
   if (IsKeyDown(KEY_A)) box.position.x -= 80.0f * GetFrameTime();
   if (IsKeyDown(KEY_S)) box.position.y += 80.0f * GetFrameTime();
   if (IsKeyDown(KEY_D)) box.position.x += 80.0f * GetFrameTime();
+
+  if (IsKeyDown(KEY_ONE)) mode = DRAWING;
+  if (IsKeyDown(KEY_TWO)) mode = LIGHTING;
 }
 
 void Game::processMouseInput() {
-  if (IsMouseButtonDown(0)) {
-    ImageDraw(&canvas.img,
-              brush.img,
-              (Rectangle){ 0, 0, (float)canvas.img.width, (float)canvas.img.height },
-              (Rectangle){ static_cast<float>(GetMouseX() - brush.img.width/2*brush.scale),
-                           static_cast<float>(GetMouseY() - brush.img.height/2*brush.scale),
-                           static_cast<float>(brush.img.width * brush.scale),
-                           static_cast<float>(brush.img.height * brush.scale) },
-              BLACK);
-    UnloadTexture(canvas.tex);
-    canvas.tex = LoadTextureFromImage(canvas.img);
-  } else if (IsMouseButtonDown(1)) {
-    ImageDraw(&canvas.img,
-              brush.img,
-              (Rectangle){ 0, 0, (float)canvas.img.width, (float)canvas.img.height },
-              (Rectangle){ static_cast<float>(GetMouseX() - brush.img.width/2*brush.scale),
-                           static_cast<float>(GetMouseY() - brush.img.height/2*brush.scale),
-                           static_cast<float>(brush.img.width*brush.scale),
-                           static_cast<float>(brush.img.height*brush.scale) },
-              WHITE);
-    UnloadTexture(canvas.tex);
-    canvas.tex = LoadTextureFromImage(canvas.img);
+  if (mode == DRAWING) {
+    if (IsMouseButtonDown(0)) {
+      ImageDraw(&canvas.img,
+                brush.img,
+                (Rectangle){ 0, 0, (float)canvas.img.width, (float)canvas.img.height },
+                (Rectangle){ static_cast<float>(GetMouseX() - brush.img.width/2*brush.scale),
+                             static_cast<float>(GetMouseY() - brush.img.height/2*brush.scale),
+                             static_cast<float>(brush.img.width * brush.scale),
+                             static_cast<float>(brush.img.height * brush.scale) },
+                BLACK);
+      UnloadTexture(canvas.tex);
+      canvas.tex = LoadTextureFromImage(canvas.img);
+    } else if (IsMouseButtonDown(1)) {
+      ImageDraw(&canvas.img,
+                brush.img,
+                (Rectangle){ 0, 0, (float)canvas.img.width, (float)canvas.img.height },
+                (Rectangle){ static_cast<float>(GetMouseX() - brush.img.width/2*brush.scale),
+                             static_cast<float>(GetMouseY() - brush.img.height/2*brush.scale),
+                             static_cast<float>(brush.img.width*brush.scale),
+                             static_cast<float>(brush.img.height*brush.scale) },
+                WHITE);
+      UnloadTexture(canvas.tex);
+      canvas.tex = LoadTextureFromImage(canvas.img);
+    }
+    brush.scale += GetMouseWheelMove()/100;
+    if (brush.scale < 0.1) brush.scale = 0.1;
+  } else if (mode == LIGHTING) {
+    if (IsMouseButtonPressed(0)) {
+      Light l;
+      l.position = (Vector2){ GetMouseX(), GetMouseY() };
+      l.color    = (Vector3){ std::sin(time), std::cos(time), 1.0 };
+      l.size     = 600;
+      lights.push_back(l);
+    } else if (IsMouseButtonDown(1)) {
+      for (int i = 0; i < lights.size(); i++) {
+        if (Vector2Length(lights[i].position - (Vector2){GetMouseX(), GetMouseY()}) < 16) {
+          lights.erase(lights.begin() + i);
+        }
+      }
+    }
   }
-  brush.scale += GetMouseWheelMove()/100;
-  if (brush.scale < 0.1) brush.scale = 0.1;
 }

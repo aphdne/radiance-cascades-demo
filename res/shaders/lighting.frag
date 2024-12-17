@@ -17,8 +17,9 @@ out vec4 finalColor;
 uniform sampler2D uOcclusionMask;
 uniform vec2 uResolution;
 uniform float uTime;
+uniform int uLightsAmount;
 
-uniform Light lights[16];
+uniform Light lights[64];
 
 float terrain(vec2 p)
 {
@@ -30,7 +31,7 @@ void main() {
   vec3 lightResult = vec3(0.0);
   vec3 brightResult = vec3(0.0);
 
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < uLightsAmount; i++) {
     vec2 normalisedLightPos = lights[i].position/uResolution;
     float brightness = 1.0;
 
