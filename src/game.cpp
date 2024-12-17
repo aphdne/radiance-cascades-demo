@@ -26,14 +26,16 @@ void Game::update() {
 
 
   Vector2 mousePos   = { static_cast<float>(GetMouseX()),  static_cast<float>(GetMouseY()) };
-  SetShaderValue(maskShader, GetShaderLocation(maskShader, "uMousePos"), &mousePos, SHADER_UNIFORM_VEC2);
+  SetShaderValue(maskShader, GetShaderLocation(maskShader, "uLightPos"), &boxPosition, SHADER_UNIFORM_VEC2);
+
+  SetShaderValue(maskShader, GetShaderLocation(maskShader, "uTime"), &time, SHADER_UNIFORM_FLOAT);
 }
 
 void Game::render() {
   ClearBackground(PINK);
 
   BeginShaderMode(maskShader);
-    // SetShaderValueTexture() has to be called while the shader is enabled
+    // <!> SetShaderValueTexture() has to be called while the shader is enabled
     SetShaderValueTexture(maskShader, GetShaderLocation(maskShader, "uOcclusionMask"), canvasTex);
     DrawTexture(canvasTex, 0, 0, WHITE);
   EndShaderMode();
@@ -47,10 +49,6 @@ void Game::render() {
 
   for (Rectangle* r : walls) {
     DrawRectanglePro(*r, (Vector2){ 0, 0 }, 0, BLACK);
-    // DrawLine(GetMouseX(), GetMouseY(), r->x, r->y, RED);
-    // DrawLine(GetMouseX(), GetMouseY(), r->x+r->width, r->y, RED);
-    // DrawLine(GetMouseX(), GetMouseY(), r->x, r->y+r->height, RED);
-    // DrawLine(GetMouseX(), GetMouseY(), r->x+r->width, r->y+r->height, RED);
   }
 
   if (tool == BRUSH) {
@@ -119,6 +117,14 @@ void Game::processMouseInput() {
                 (Rectangle){ 0, 0, (float)canvas.width, (float)canvas.height },
                 (Rectangle){ static_cast<float>(GetMouseX() - brush.width/2*BRUSH_SCALE), static_cast<float>(GetMouseY() - brush.height/2*BRUSH_SCALE), static_cast<float>(brush.width*BRUSH_SCALE), static_cast<float>(brush.height*BRUSH_SCALE) },
                 BLACK);
+      UnloadTexture(canvasTex);
+      canvasTex = LoadTextureFromImage(canvas);
+    } else if (IsMouseButtonDown(1)) {
+      ImageDraw(&canvas,
+                brush,
+                (Rectangle){ 0, 0, (float)canvas.width, (float)canvas.height },
+                (Rectangle){ static_cast<float>(GetMouseX() - brush.width/2*BRUSH_SCALE), static_cast<float>(GetMouseY() - brush.height/2*BRUSH_SCALE), static_cast<float>(brush.width*BRUSH_SCALE), static_cast<float>(brush.height*BRUSH_SCALE) },
+                BACKGROUND_COLOR);
       UnloadTexture(canvasTex);
       canvasTex = LoadTextureFromImage(canvas);
     }
