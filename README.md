@@ -2,7 +2,7 @@
 
 1. [Requirements](#requirements)
 2. [Setup (macOS, Linux)](#setup-macos-linux)
-3. [Setup (Windows)](#setup-windows)
+3. [Setup (Windows)](#setup-windows-visual-studio)
 
 Lorem ipsum (/ˌlɔː.rəm ˈɪp.səm/ LOR-əm IP-səm) is a dummy or placeholder text commonly used in graphic design, publishing, and web development to fill empty spaces in a layout that do not yet have content.
 
@@ -20,32 +20,30 @@ Windows tests planned.
 
 ## Setup (macOS, Linux) 
 
-Install Raylib ([Linux](https://github.com/raysan5/raylib/wiki/Working-on-GNU-Linux), [macOS](https://github.com/raysan5/raylib/wiki/Working-on-macOS)):
-
-macOS:
-```bash
-brew install raylib
-```
-
-Arch Linux:
-```bash
-sudo pacman -S raylib
-```
-
-Compile via CMake:
+If Raylib is not installed on your machine, CMake will download and build Raylib for you in the build directory.
 
 ```bash
-# either run the convenience build script (with the `-r` flag to run the binary after compilation)
-./build.sh -r
+# run the convenience build script 
+./build.sh    # to compile without running
+./build.sh -r # to compile and run the resulting binary 
 
-# or build it manually
+# or build it manually via CMake
 mkdir build
 cd build
-cmake ..            # create makefile via CMake
-make                # run makefile
-./radiance_cascades # run the programme
+cmake ..
+make
+cd .. # run the resulting binary in the source directory, not the build directory
+./radiance_cascades
 ```
 
-## Setup (Windows)
+## Setup (Windows Visual Studio)
 
-TBD
+If Raylib is not installed on your machine, CMake will download and build Raylib for you in the build directory.
+
+```bash
+mkdir build
+cd build
+cmake ..
+```
+
+This will generate a VS solution file (.sln) for you to use for compilation. Make sure to run any resulting .exe from the project root directory.
