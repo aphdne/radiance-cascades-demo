@@ -5,9 +5,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED NO)
 set(CMAKE_CXX_EXTENSIONS        OFF)
 
 # major, minor, patch, and _STAGE_ (0 = alpha, 1 = beta, 2 = gamma/release)
-project(radiance_cascades VERSION 0.10.7.0)
+project(radiance_cascades VERSION 0.10.8.0)
 
-configure_file(config.h.in config.h)
+configure_file(src/config.h.in config.h)
 
 add_executable(${PROJECT_NAME} src/main.cpp src/game.cpp)
 target_include_directories(radiance_cascades PUBLIC "${PROJECT_BINARY_DIR}")

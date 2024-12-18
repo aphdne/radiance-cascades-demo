@@ -144,8 +144,13 @@ void Game::processKeyboardInput() {
   if (IsKeyPressed(KEY_TWO))   changeMode(LIGHTING);
   if (IsKeyPressed(KEY_THREE)) changeMode(VIEWING);
 
-  if (IsKeyPressed(KEY_F3)) debug = !debug;
-  if (IsKeyPressed(KEY_S))  (smoothShadows == 0) ? smoothShadows = 1 : smoothShadows = 0;
+  if (IsKeyPressed(KEY_F3))  debug = !debug;
+  if (IsKeyPressed(KEY_F12)) {
+    printf("Taking screenshot.\n");
+    if (!DirectoryExists("screenshots")) MakeDirectory("screenshots");
+    TakeScreenshot("screenshots/screenshot.png");
+  }
+  if (IsKeyPressed(KEY_S))   (smoothShadows == 0) ? smoothShadows = 1 : smoothShadows = 0;
 
   // clearing
   if (IsKeyPressed(KEY_C)) {

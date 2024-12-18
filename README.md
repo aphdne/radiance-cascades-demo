@@ -14,7 +14,7 @@ Maze image texture initially generated via [mazegenerator.net](https://www.mazeg
     - A C++11 (or higher) compiler
 - Raylib 5.5 (provided via CMake if not installed system-wide)
 
-This currently builds and runs on macOS, Arch Linux (on X11), and Windows. No planned support for Wayland :P.
+This currently builds and runs on macOS, Arch Linux (on X11), and Windows. No planned support for Wayland :P
 
 ## Setup (macOS, Linux) 
 

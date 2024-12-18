@@ -11,7 +11,7 @@
 struct Light {
   Vector2 position;
   Vector3 color;
-  float size; // in pixels
+  float   size; // in pixels
 };
 
 class Game {

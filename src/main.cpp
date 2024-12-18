@@ -3,6 +3,11 @@
 #include "game.h"
 
 int main() {
+  if (!DirectoryExists("res")) {
+    printf("Please run this file from the project root directory.\n");
+    return 0;
+  }
+
   std::string title = "Radiance Cascades ";
   title += VERSION_STAGE;
   title += VERSION;
