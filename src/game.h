@@ -30,14 +30,20 @@ class Game {
 
     bool debug;
     float time;
+    double timeSinceModeSwitch;
 
     std::vector<Light> lights;
 
-    enum {
+    enum Mode {
       DRAWING,
       LIGHTING,
       VIEWING
     } mode;
+
+    struct {
+      Image     img;
+      Texture2D tex;
+    } cursor;
 
     struct {
       Image     img;
