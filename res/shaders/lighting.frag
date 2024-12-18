@@ -1,8 +1,5 @@
 #version 330 core
 
-#define N             500.0 // amount of passes
-#define GRADIENT_SIZE 400 // in pixels
-
 struct Light {
   vec2  position;
   vec3  color;
@@ -10,7 +7,6 @@ struct Light {
 };
 
 in vec2 fragTexCoord;
-in vec2 gl_FragCoord;
 
 out vec4 finalColor;
 
@@ -18,6 +14,7 @@ uniform sampler2D uOcclusionMask;
 uniform vec2 uResolution;
 uniform float uTime;
 uniform int uLightsAmount;
+uniform int uApple;
 
 uniform Light lights[64];
 
@@ -31,6 +28,9 @@ void main() {
   vec3 lightResult = vec3(0.0);
   vec3 brightResult = vec3(0.0);
 
+  float N = 512.0;
+  if (uApple == 1) N = 128.0;
+
   for (int i = 0; i < uLightsAmount; i++) {
     vec2 normalisedLightPos = lights[i].position/uResolution;
     float brightness = 1.0;
@@ -42,8 +42,12 @@ void main() {
     }
 
     // radial gradient - adapted from https://www.shadertoy.com/view/4tjSWh
-    brightness *= 1.0 - distance(uResolution.xy * vec2(normalisedLightPos.x, 1.0 - normalisedLightPos.y), gl_FragCoord.xy) * 2/lights[i].size;
-    //brightness *= 1.0 - smoothstep(0.0, 0.5, length(fragTexCoord - normalisedLightPos));
+
+    if (uApple == 1) {
+      brightness *= 1.0 - smoothstep(0.0, 0.5, length(fragTexCoord - normalisedLightPos));
+    } else {
+      brightness *= 1.0 - distance(uResolution.xy * vec2(normalisedLightPos.x, 1.0 - normalisedLightPos.y), gl_FragCoord.xy) * 2/lights[i].size;
+    }
 
     if (brightness > 0) brightResult += brightness * lights[i].color;
   }

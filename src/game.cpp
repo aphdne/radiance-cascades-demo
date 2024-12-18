@@ -38,6 +38,12 @@ void Game::update() {
 
   int lightsAmount = lights.size();
   SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uLightsAmount"), &lightsAmount, SHADER_UNIFORM_INT);
+
+  int apple = 0;
+  #ifdef __APPLE__
+  apple = 1;
+  #endif
+  SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uApple"), &apple, SHADER_UNIFORM_INT);
 }
 
 void Game::render() {
@@ -92,9 +98,7 @@ void Game::processKeyboardInput() {
       canvas.tex = LoadTextureFromImage(canvas.img);
     } else if (mode == LIGHTING) {
       std::cout << "Clearing lights." << std::endl;
-      for (int i = lights.size(); i > 0; i--) {
-        lights.erase(lights.begin() + i);
-      }
+      lights.clear();
     }
   }
   if (IsKeyPressed(KEY_V)) {
@@ -143,13 +147,13 @@ void Game::processMouseInput() {
   } else if (mode == LIGHTING) {
     if (IsMouseButtonPressed(0)) {
       Light l;
-      l.position = (Vector2){ GetMouseX(), GetMouseY() };
+      l.position = (Vector2){ static_cast<float>(GetMouseX()), static_cast<float>(GetMouseY()) };
       l.color    = (Vector3){ std::sin(time), std::cos(time), 1.0 };
       l.size     = 600;
       lights.push_back(l);
     } else if (IsMouseButtonDown(1)) {
       for (int i = 0; i < lights.size(); i++) {
-        if (Vector2Length(lights[i].position - (Vector2){GetMouseX(), GetMouseY()}) < 16) {
+        if (Vector2Length(lights[i].position - (Vector2){ static_cast<float>(GetMouseX()), static_cast<float>(GetMouseY()) }) < 16) {
           lights.erase(lights.begin() + i);
         }
       }
