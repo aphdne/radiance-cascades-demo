@@ -24,7 +24,6 @@ class Game {
     void processMouseInput();
 
   private:
-    Shader rainbowShader;
     Shader lightingShader;
 
     bool debug;
@@ -34,13 +33,9 @@ class Game {
 
     enum {
       DRAWING,
-      LIGHTING
+      LIGHTING,
+      VIEWING
     } mode;
-
-    struct {
-      Vector2 position;
-      float   size;
-    } box;
 
     struct {
       Image     img;
