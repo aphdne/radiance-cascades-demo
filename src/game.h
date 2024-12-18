@@ -25,6 +25,8 @@ class Game {
 
   private:
     Shader lightingShader;
+    int smoothShadows;
+    int cascadeAmount;
 
     bool debug;
     float time;

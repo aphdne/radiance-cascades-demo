@@ -16,10 +16,20 @@ void placeLights(std::vector<Light>* lights, int N = 4, float d = 256.0) {
 }
 
 Game::Game() {
-  debug    = false;
-  mode     = DRAWING;
+  debug         = false;
+  smoothShadows = true;
+  mode          = DRAWING;
+  cascadeAmount = 512;
+  #if __APPLE__
+  cascadeAmount = 128;
+  #endif
 
-  lightingShader = LoadShader(0, TextFormat("res/shaders/lighting.frag", GLSL_VERSION));
+  lightingShader = LoadShader(0, "res/shaders/lighting.frag");
+  if (!IsShaderValid(lightingShader)) {
+    printf("lightingShader is broken!!\n");
+    UnloadShader(lightingShader);
+    lightingShader = LoadShader(0, "res/shaders/broken.frag");
+  }
 
   brush.img = LoadImage("res/brush.png");
   brush.tex = LoadTextureFromImage(brush.img);
@@ -46,6 +56,9 @@ void Game::update() {
     apple = 1;
   #endif
   SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uApple"), &apple, SHADER_UNIFORM_INT);
+
+  SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uCascadeAmount"), &cascadeAmount, SHADER_UNIFORM_INT);
+  SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uSmoothShadows"), &smoothShadows, SHADER_UNIFORM_INT);
 }
 
 void Game::render() {
@@ -81,19 +94,22 @@ void Game::render() {
 
 void Game::renderUI() {
   if (debug) {
-    DrawText(TextFormat("%i FPS",    GetFPS()),      0, 0,  1, GREEN);
-    DrawText(TextFormat("%i lights", lights.size()), 0, 8,  1, GREEN);
-    DrawText(TextFormat("%f scale",  brush.scale),   0, 16, 1, GREEN);
-    DrawText(TextFormat("%f lighting scale", brush.scale * 2400),   0, 24, 1, GREEN);
+    DrawText(TextFormat("%i FPS",            GetFPS()),             0, 0,  1, GREEN);
+    DrawText(TextFormat("%i lights",         lights.size()),        0, 8,  1, GREEN);
+    if      (mode == DRAWING)  DrawText(TextFormat("%f brush scale",    brush.scale),    0, 32, 1, GREEN);
+    else if (mode == LIGHTING) DrawText(TextFormat("%f light size", brush.scale * 2400), 0, 32, 1, GREEN);
+    DrawText(TextFormat("%i cascades",       cascadeAmount),        0, 40, 1, GREEN);
+    if (smoothShadows) DrawText("smoothShadows ON", 0, 48, 1, GREEN);
   }
 }
 
 void Game::processKeyboardInput() {
-  if (IsKeyDown(KEY_ONE))   mode = DRAWING;
-  if (IsKeyDown(KEY_TWO))   mode = LIGHTING;
-  if (IsKeyDown(KEY_THREE)) mode = VIEWING;
+  if (IsKeyPressed(KEY_ONE))   mode = DRAWING;
+  if (IsKeyPressed(KEY_TWO))   mode = LIGHTING;
+  if (IsKeyPressed(KEY_THREE)) mode = VIEWING;
 
   if (IsKeyPressed(KEY_F3)) debug = !debug;
+  if (IsKeyPressed(KEY_S))  (smoothShadows == 0) ? smoothShadows = 1 : smoothShadows = 0;
   if (IsKeyPressed(KEY_C)) {
     switch (mode) {
       case DRAWING:
@@ -118,11 +134,38 @@ void Game::processKeyboardInput() {
       placeLights(&lights);
     }
   }
+
+  if (IsKeyDown(KEY_LEFT_CONTROL)) {
+    if (IsKeyPressed(KEY_R)) {
+      printf("Reloading shaders.\n");
+      UnloadShader(lightingShader);
+      lightingShader = LoadShader(0, "res/shaders/lighting.frag");
+      if (!IsShaderValid(lightingShader)) {
+        UnloadShader(lightingShader);
+        lightingShader = LoadShader(0, "res/shaders/broken.frag");
+      }
+    }
+  }
 }
 
 void Game::processMouseInput() {
-  brush.scale += GetMouseWheelMove()/100;
-  if (brush.scale < 0.1) brush.scale = 0.1;
+  if (IsKeyDown(KEY_LEFT_CONTROL)) {
+    int amp = 50;
+    if (IsKeyDown(KEY_LEFT_SHIFT)) amp = 1;
+    cascadeAmount += GetMouseWheelMove() * amp;
+    if (cascadeAmount < 1) cascadeAmount = 1;
+  } else {
+    brush.scale += GetMouseWheelMove() / 100;
+    if (brush.scale < 0.1) brush.scale = 0.1;
+  }
+
+  if (IsMouseButtonDown(2)) {
+    for (int i = 0; i < lights.size(); i++) {
+      if (Vector2Length(lights[i].position - (Vector2){ static_cast<float>(GetMouseX()), static_cast<float>(GetMouseY()) }) < 16) {
+        lights[i].position = (Vector2){ static_cast<float>(GetMouseX()), static_cast<float>(GetMouseY()) };
+      }
+    }
+  }
 
   switch (mode) {
     case DRAWING:
@@ -159,14 +202,6 @@ void Game::processMouseInput() {
         for (int i = 0; i < lights.size(); i++) {
           if (Vector2Length(lights[i].position - (Vector2){ static_cast<float>(GetMouseX()), static_cast<float>(GetMouseY()) }) < 16) {
             lights.erase(lights.begin() + i);
-          }
-        }
-      }
-    case VIEWING:
-      if (IsMouseButtonDown(2)) {
-        for (int i = 0; i < lights.size(); i++) {
-          if (Vector2Length(lights[i].position - (Vector2){ static_cast<float>(GetMouseX()), static_cast<float>(GetMouseY()) }) < 16) {
-            lights[i].position = (Vector2){ static_cast<float>(GetMouseX()), static_cast<float>(GetMouseY()) };
           }
         }
       }

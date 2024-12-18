@@ -6,6 +6,8 @@
 
 Lorem ipsum (/ˌlɔː.rəm ˈɪp.səm/ LOR-əm IP-səm) is a dummy or placeholder text commonly used in graphic design, publishing, and web development to fill empty spaces in a layout that do not yet have content.
 
+Maze image texture initially generated via [mazegenerator.net](https://www.mazegenerator.net/). 
+
 ## Requirements
 
 - CMake 3.25

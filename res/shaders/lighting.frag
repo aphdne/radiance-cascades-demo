@@ -15,29 +15,37 @@ uniform vec2 uResolution;
 uniform float uTime;
 uniform int uLightsAmount;
 uniform int uApple;
+uniform int uSmoothShadows;
+uniform int uCascadeAmount;
 
 uniform Light lights[64];
 
-float terrain(vec2 p)
+// sourced from https://gist.github.com/companje/29408948f1e8be54dd5733a74ca49bb9
+float map(float value, float min1, float max1, float min2, float max2) {
+  return min2 + (value - min1) * (max2 - min2) / (max1 - min1);
+}
+
+// this technique is sourced from https://www.shadertoy.com/view/tddXzj
+float terrain(vec2 p, float t, vec2 normalisedLightPos)
 {
+  if (uSmoothShadows == 1) {
+    //return mix(1.0 - exp(-t), 1.0, step(0.25, texture(uOcclusionMask, p).x)); // smooth shadows
+    return mix(map(distance(uResolution * normalisedLightPos, gl_FragCoord.xy), 0.0, uResolution.x, 0.9, 1.0), 1.0, step(0.25, texture(uOcclusionMask, p).x)); // smooth shadows
+  }
+  //return mix(0.99, 1.0, step(0.25, texture(uOcclusionMask, p).x)); // smooth shadows
   return step(0.25, texture(uOcclusionMask, p).x); // hard shadows
-  //return mix(0.8, 1.0, step(0.25, texture(uOcclusionMask, p).x)); // smooth shadows
 }
 
 void main() {
-  vec3 lightResult = vec3(0.0);
-  vec3 brightResult = vec3(0.0);
-
-  float N = 512.0;
-  if (uApple == 1) N = 128.0;
+  vec3 result = vec3(0.0);
 
   for (int i = 0; i < uLightsAmount; i++) {
     vec2 normalisedLightPos = lights[i].position/uResolution;
     float brightness = 1.0;
 
-    for (float j = 0.0; j < N; j++) {
-      float t = j / N;
-      float h = terrain(mix(fragTexCoord, normalisedLightPos, t));
+    for (float j = 0.0; j < uCascadeAmount; j++) {
+      float t = j / uCascadeAmount;
+      float h = terrain(mix(fragTexCoord, normalisedLightPos, t), t, normalisedLightPos);
       brightness *= h;
     }
 
@@ -49,9 +57,9 @@ void main() {
       brightness *= 1.0 - distance(uResolution.xy * vec2(normalisedLightPos.x, 1.0 - normalisedLightPos.y), gl_FragCoord.xy) * 2/lights[i].size;
     }
 
-    if (brightness > 0) brightResult += brightness * lights[i].color;
+    if (brightness > 0) result += brightness * lights[i].color;
   }
 
-  //finalColor = vec4(brightResult * step(0.25, texture(uOcclusionMask, fragTexCoord)).xxx, 1.0f);
-  finalColor = vec4(brightResult, 1.0f);
+  // combine light result w/ underlying occlusion mask texture
+  gl_FragColor = vec4(result * step(0.25, texture(uOcclusionMask, fragTexCoord)).xxx, 1.0f);
 }
