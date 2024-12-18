@@ -30,7 +30,7 @@ float terrain(vec2 p, float t, vec2 normalisedLightPos)
 {
   if (uSmoothShadows == 1) {
     //return mix(1.0 - exp(-t), 1.0, step(0.25, texture(uOcclusionMask, p).x)); // smooth shadows
-    return mix(map(distance(uResolution * normalisedLightPos, gl_FragCoord.xy), 0.0, uResolution.x, 0.9, 1.0), 1.0, step(0.25, texture(uOcclusionMask, p).x)); // smooth shadows
+    if (uApple == 0) return mix(map(distance(uResolution * normalisedLightPos, gl_FragCoord.xy), 0.0, uResolution.x, 0.9, 1.0), 1.0, step(0.25, texture(uOcclusionMask, p).x)); // smooth shadows
   }
   //return mix(0.99, 1.0, step(0.25, texture(uOcclusionMask, p).x)); // smooth shadows
   return step(0.25, texture(uOcclusionMask, p).x); // hard shadows
