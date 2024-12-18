@@ -11,12 +11,15 @@ in vec2 fragTexCoord;
 out vec4 finalColor;
 
 uniform sampler2D uOcclusionMask;
-uniform vec2 uResolution;
 uniform float uTime;
 uniform int uLightsAmount;
+uniform vec2 uResolution;
+uniform vec2 uPlayerLocation;
+
 uniform int uApple;
 uniform int uSmoothShadows;
 uniform int uCascadeAmount;
+uniform int uViewing;
 
 uniform Light lights[64];
 
@@ -26,13 +29,11 @@ float map(float value, float min1, float max1, float min2, float max2) {
 }
 
 // this technique is sourced from https://www.shadertoy.com/view/tddXzj
-float terrain(vec2 p, float t, vec2 normalisedLightPos)
+float terrain(vec2 p, vec2 normalisedLightPos, int smoothShadows)
 {
-  if (uSmoothShadows == 1) {
-    //return mix(1.0 - exp(-t), 1.0, step(0.25, texture(uOcclusionMask, p).x)); // smooth shadows
-    if (uApple == 0) return mix(map(distance(uResolution * normalisedLightPos, gl_FragCoord.xy), 0.0, uResolution.x, 0.9, 1.0), 1.0, step(0.25, texture(uOcclusionMask, p).x)); // smooth shadows
+  if (smoothShadows == 1) {
+    if (uApple == 0) return mix(map(distance(uResolution * normalisedLightPos, gl_FragCoord.xy), 0.0, uResolution.x, 0.9, 1.0), 1.0, step(0.25, texture(uOcclusionMask, p).x));
   }
-  //return mix(0.99, 1.0, step(0.25, texture(uOcclusionMask, p).x)); // smooth shadows
   return step(0.25, texture(uOcclusionMask, p).x); // hard shadows
 }
 
@@ -45,7 +46,7 @@ void main() {
 
     for (float j = 0.0; j < uCascadeAmount; j++) {
       float t = j / uCascadeAmount;
-      float h = terrain(mix(fragTexCoord, normalisedLightPos, t), t, normalisedLightPos);
+      float h = terrain(mix(fragTexCoord, normalisedLightPos, t), normalisedLightPos, uSmoothShadows);
       brightness *= h;
     }
 
@@ -60,6 +61,21 @@ void main() {
     if (brightness > 0) result += brightness * lights[i].color;
   }
 
-  // combine light result w/ underlying occlusion mask texture
-  gl_FragColor = vec4(result * step(0.25, texture(uOcclusionMask, fragTexCoord)).xxx, 1.0f);
+  if (uViewing == 1) {
+    vec2 normalisedPlayerPos = uPlayerLocation/uResolution;
+    vec3 visible = vec3(1.0);
+
+    for (float j = 0.0; j < uCascadeAmount; j++) {
+      float t = j / uCascadeAmount;
+      float h = terrain(mix(fragTexCoord, normalisedPlayerPos, t), normalisedPlayerPos, 0);
+      visible *= h;
+    }
+
+    visible = mix(texture(uOcclusionMask, fragTexCoord).xyz * 0.015, result.xyz, visible);
+
+    gl_FragColor = vec4(visible, 1.0f);
+  } else {
+    // combine light result w/ underlying occlusion mask texture
+    gl_FragColor = vec4(result * step(0.25, texture(uOcclusionMask, fragTexCoord)).xxx, 1.0f);
+  }
 }

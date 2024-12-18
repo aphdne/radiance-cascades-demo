@@ -53,6 +53,9 @@ void Game::update() {
   Vector2 resolution = { SCREEN_WIDTH, SCREEN_HEIGHT };
   SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
 
+  Vector2 mouse = { static_cast<float>(GetMouseX()), static_cast<float>(GetMouseY()) };
+  SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uPlayerLocation"), &mouse, SHADER_UNIFORM_VEC2);
+
   int lightsAmount = lights.size();
   SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uLightsAmount"), &lightsAmount, SHADER_UNIFORM_INT);
   SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uCascadeAmount"), &cascadeAmount, SHADER_UNIFORM_INT);
@@ -63,6 +66,10 @@ void Game::update() {
   #endif
   SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uApple"), &apple, SHADER_UNIFORM_INT);
   SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uSmoothShadows"), &smoothShadows, SHADER_UNIFORM_INT);
+
+  int viewing = 0;
+  if (mode == VIEWING) viewing = 1;
+  SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uViewing"), &viewing, SHADER_UNIFORM_INT);
 }
 
 void Game::render() {
@@ -99,10 +106,10 @@ void Game::renderUI() {
                              (float)(GetMouseY() - brush.img.height/2*brush.scale) },
                     0.0,
                     brush.scale,
-                    BLACK);
+                    Color{ 0, 0, 0, 64} );
       break;
     case LIGHTING:
-      DrawCircleLines(GetMouseX(), GetMouseY(), (brush.scale*1200)/64, ColorFromNormalized(Vector4{ std::sin(time), std::cos(time), 1.0, 1.0 }));
+      DrawCircleLines(GetMouseX(), GetMouseY(), (brush.scale*1200)/64, ColorFromNormalized(Vector4{ std::sin(time), std::cos(time), 1.0, 0.5 }));
       break;
   }
 
