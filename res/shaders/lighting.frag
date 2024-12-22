@@ -1,27 +1,29 @@
 #version 330 core
 
+#define VIEWER_OUT_OF_SIGHT_BRIGHTNESS 0.015
+#define VIEWER_GRADIENT_RADIUS         450
+
 struct Light {
   vec2  position;
   vec3  color;
-  float size;
+  float radius;
 };
 
 in vec2 fragTexCoord;
 
-out vec4 finalColor;
+out vec4 fragColor;
 
+// data
+uniform Light lights[128];
+uniform int uLightsAmount;
 uniform sampler2D uOcclusionMask;
 uniform float uTime;
-uniform int uLightsAmount;
 uniform vec2 uResolution;
 uniform vec2 uPlayerLocation;
 
-uniform int uApple;
-uniform int uSmoothShadows;
-uniform int uCascadeAmount;
+// config
+uniform int uCascadeAmount; // the amount of cascades primarily affects performance & light leakage. Thicker walls = less cascades needed, thinner walls = more cascades needed
 uniform int uViewing;
-
-uniform Light lights[64];
 
 // sourced from https://gist.github.com/companje/29408948f1e8be54dd5733a74ca49bb9
 float map(float value, float min1, float max1, float min2, float max2) {
@@ -29,53 +31,66 @@ float map(float value, float min1, float max1, float min2, float max2) {
 }
 
 // this technique is sourced from https://www.shadertoy.com/view/tddXzj
-float terrain(vec2 p, vec2 normalisedLightPos, int smoothShadows)
+float terrain(vec2 p, vec2 position, bool smoothShadows)
 {
-  if (smoothShadows == 1) {
-    if (uApple == 0) return mix(map(distance(uResolution * normalisedLightPos, gl_FragCoord.xy), 0.0, uResolution.x, 0.9, 1.0), 1.0, step(0.25, texture(uOcclusionMask, p).x));
+  if (smoothShadows) {
+    // increased opacity closer to the light source
+    return mix(
+      map(
+        distance(position, gl_FragCoord.xy),
+        0.0,
+        ((uResolution.x < uResolution.y) ? uResolution.y : uResolution.x) * 500,
+        0.9,
+        1.0
+      ),
+      1.0,
+      step(0.25, texture(uOcclusionMask, p).x)
+    );
   }
   return step(0.25, texture(uOcclusionMask, p).x); // hard shadows
+}
+
+vec3 calcVisibility(vec2 position, float gradientRadius = 300, vec3 rgb = vec3(1.0), bool smoothShadows = true) {
+  // no need to bother calculating light if the light value will be overridden by the gradient anyway
+  if (distance(fragTexCoord*uResolution, position) > gradientRadius) return vec3(0);
+
+  float brightness = 1.0;
+
+  vec2 normalisedPos = position/uResolution;
+
+  for (float j = 0.0; j < uCascadeAmount; j++) {
+    float t = j / uCascadeAmount;
+    float h = terrain(mix(fragTexCoord, normalisedPos, t), position, smoothShadows);
+    brightness *= h;
+  }
+
+  // radial gradient - adapted from https://www.shadertoy.com/view/4tjSWh
+  brightness *= 1.0 - distance(vec2(position.x, uResolution.y - position.y), gl_FragCoord.xy) * 1/gradientRadius;
+
+  return (brightness > 0) ? brightness * rgb : vec3(0);
 }
 
 void main() {
   vec3 result = vec3(0.0);
 
   for (int i = 0; i < uLightsAmount; i++) {
-    vec2 normalisedLightPos = lights[i].position/uResolution;
-    float brightness = 1.0;
-
-    for (float j = 0.0; j < uCascadeAmount; j++) {
-      float t = j / uCascadeAmount;
-      float h = terrain(mix(fragTexCoord, normalisedLightPos, t), normalisedLightPos, uSmoothShadows);
-      brightness *= h;
-    }
-
-    // radial gradient - adapted from https://www.shadertoy.com/view/4tjSWh
-
-    if (uApple == 1) {
-      brightness *= 1.0 - smoothstep(0.0, 0.5, length(fragTexCoord - normalisedLightPos));
-    } else {
-      brightness *= 1.0 - distance(uResolution.xy * vec2(normalisedLightPos.x, 1.0 - normalisedLightPos.y), gl_FragCoord.xy) * 2/lights[i].size;
-    }
-
-    if (brightness > 0) result += brightness * lights[i].color;
+    result += calcVisibility(lights[i].position, lights[i].radius, lights[i].color);
   }
 
   if (uViewing == 1) {
-    vec2 normalisedPlayerPos = uPlayerLocation/uResolution;
-    vec3 visible = vec3(1.0);
-
-    for (float j = 0.0; j < uCascadeAmount; j++) {
-      float t = j / uCascadeAmount;
-      float h = terrain(mix(fragTexCoord, normalisedPlayerPos, t), normalisedPlayerPos, 0);
-      visible *= h;
-    }
-
-    visible = mix(texture(uOcclusionMask, fragTexCoord).xyz * 0.015, result.xyz, visible);
-
-    gl_FragColor = vec4(visible, 1.0f);
+    fragColor = vec4(
+      mix(
+        texture(uOcclusionMask, fragTexCoord).xyz * VIEWER_OUT_OF_SIGHT_BRIGHTNESS,
+        result.xyz,
+        calcVisibility(uPlayerLocation, VIEWER_GRADIENT_RADIUS, vec3(1.0), false)
+      ),
+      1.0
+    );
   } else {
     // combine light result w/ underlying occlusion mask texture
-    gl_FragColor = vec4(result * step(0.25, texture(uOcclusionMask, fragTexCoord)).xxx, 1.0f);
+    fragColor = vec4(
+      result * step(0.25, texture(uOcclusionMask, fragTexCoord)).xxx,
+      1.0
+    );
   }
 }

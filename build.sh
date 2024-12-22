@@ -9,6 +9,10 @@ cmake ..
 make
 popd
 
-while getopts "r" arg; do
-  ./build/radiance_cascades
+while getopts ":r" arg; do
+  case ${arg} in
+    r)
+      ./build/radiance_cascades
+      ;;
+  esac
 done

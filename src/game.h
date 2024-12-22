@@ -11,7 +11,7 @@
 struct Light {
   Vector2 position;
   Vector3 color;
-  float   size; // in pixels
+  float   radius; // in pixels
 };
 
 class Game {
@@ -25,12 +25,13 @@ class Game {
 
   private:
     Shader lightingShader;
-    int smoothShadows;
     int cascadeAmount;
 
     bool debug;
     float time;
     double timeSinceModeSwitch;
+
+    Texture2D currentToolIcon;
 
     std::vector<Light> lights;
 

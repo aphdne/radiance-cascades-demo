@@ -14,7 +14,7 @@ int main() {
 
   InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, title.c_str());
   SetTargetFPS(GetMonitorRefreshRate(GetCurrentMonitor()));
-  SetTraceLogLevel(LOG_ERROR);
+  SetTraceLogLevel(LOG_WARNING);
 
   Game game;
 
