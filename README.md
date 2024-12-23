@@ -3,7 +3,7 @@
 1. [Requirements](#requirements)
 2. [Setup (macOS, Linux)](#setup-macos-linux)
 3. [Setup (Windows)](#setup-windows-visual-studio)
-3. [Controls](#controls)
+4. [Controls](#controls)
 
 2D lighting demo. Intended for 1080p displays.
 
@@ -13,12 +13,14 @@ Maze image texture initially generated via [mazegenerator.net](https://www.mazeg
 
 - CMake 3.25
     - A C++11 (or higher) compiler
-- Raylib 5.5 (provided via CMake if not installed system-wide)
+- Raylib 5.5 (optional)
     - If Raylib is not [installed](https://github.com/raysan5/raylib#build-and-installation) on your machine, CMake will download and build Raylib for you in the build directory.
 
 This currently builds and runs on macOS, Arch Linux (on X11), and Windows. No planned support for Wayland :P
 
 ## Setup (macOS, Linux)
+
+After cloning the repo and cd'ing into the repo folder:
 
 ```bash
 # run the convenience build script
@@ -36,7 +38,7 @@ cd .. # run the resulting binary in the source directory, not the build director
 
 ## Setup (Windows Visual Studio)
 
-Via command prompt:
+After cloning the repo and cd'ing into the repo folder:
 
 ```bash
 mkdir build
@@ -44,9 +46,9 @@ cd build
 cmake ..
 ```
 
-This will generate a VS solution file (.sln) for you to use for compilation.
+This will generate a Visual Studio solution file (.sln) for you to use for compilation. Open this in Visual Studio and build it.
 
-Make sure to run any resulting .exe from the project root directory.
+You may get an "access is denied" error. This can be ignored. The resulting executable will be in `build/Debug`. Either run from or move the executable to the project root directory so that it can access the resources folder.
 
 ## Controls
 

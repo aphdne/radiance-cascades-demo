@@ -50,7 +50,7 @@ float terrain(vec2 p, vec2 position, bool smoothShadows)
   return step(0.25, texture(uOcclusionMask, p).x); // hard shadows
 }
 
-vec3 calcVisibility(vec2 position, float gradientRadius = 300, vec3 rgb = vec3(1.0), bool smoothShadows = true) {
+vec3 calcVisibility(vec2 position, float gradientRadius, vec3 rgb, bool smoothShadows) {
   // no need to bother calculating light if the light value will be overridden by the gradient anyway
   if (distance(fragTexCoord*uResolution, position) > gradientRadius) return vec3(0);
 
@@ -74,7 +74,7 @@ void main() {
   vec3 result = vec3(0.0);
 
   for (int i = 0; i < uLightsAmount; i++) {
-    result += calcVisibility(lights[i].position, lights[i].radius, lights[i].color);
+    result += calcVisibility(lights[i].position, lights[i].radius, lights[i].color, true);
   }
 
   if (uViewing == 1) {
