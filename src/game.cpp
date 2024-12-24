@@ -54,7 +54,7 @@ void Game::update() {
   resolution *= GetWindowScaleDPI();
   SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
 
-  Vector2 mouse = MOUSE_VECTOR;
+  Vector2 mouse = MOUSE_VECTOR * GetWindowScaleDPI();
   SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uPlayerLocation"), &mouse, SHADER_UNIFORM_VEC2);
 
   int lightsAmount = lights.size();
@@ -66,9 +66,11 @@ void Game::update() {
   SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uViewing"), &viewing, SHADER_UNIFORM_INT);
 
   for (int i = 0; i < lights.size(); i++) {
-    SetShaderValue(lightingShader, GetShaderLocation(lightingShader, TextFormat("lights[%i].position", i)), &lights[i].position, SHADER_UNIFORM_VEC2);
+    Vector2 position = lights[i].position * GetWindowScaleDPI();
+    float   radius    = lights[i].radius * GetWindowScaleDPI().x;
+    SetShaderValue(lightingShader, GetShaderLocation(lightingShader, TextFormat("lights[%i].position", i)), &position, SHADER_UNIFORM_VEC2);
     SetShaderValue(lightingShader, GetShaderLocation(lightingShader, TextFormat("lights[%i].color",    i)), &lights[i].color,    SHADER_UNIFORM_VEC3);
-    SetShaderValue(lightingShader, GetShaderLocation(lightingShader, TextFormat("lights[%i].radius",   i)), &lights[i].radius,   SHADER_UNIFORM_FLOAT);
+    SetShaderValue(lightingShader, GetShaderLocation(lightingShader, TextFormat("lights[%i].radius",   i)), &radius,   SHADER_UNIFORM_FLOAT);
    }
 }
 

@@ -5,7 +5,7 @@
 3. [Setup (Windows)](#setup-windows-visual-studio)
 4. [Controls](#controls)
 
-2D lighting demo. Intended for 1080p displays.
+2D lighting demo.
 
 Maze image texture initially generated via [mazegenerator.net](https://www.mazegenerator.net/).
 
