@@ -2,5 +2,3 @@ build
 build/*
 screenshots/
 git.diff
-
-.DS_Store
