@@ -94,7 +94,7 @@ void Game::renderUI() {
 
   DrawTexture(currentToolIcon, 0, SCREEN_HEIGHT-8, WHITE);
 
-  DrawText(str.c_str(), 12, SCREEN_HEIGHT - 8, 1, ColorFromHSV(0.0, 0.0, 1.0 - v));
+  DrawText(str.c_str(), 12, SCREEN_HEIGHT - 8, 1, ColorFromNormalized(Vector4{1.0, 1.0, 1.0, static_cast<float>(1.0 - v)}));
 
   switch (mode) {
     case DRAWING:
