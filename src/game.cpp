@@ -17,8 +17,9 @@ void placeLights(std::vector<Light>* lights, int N = 4, float d = 256.0) {
 }
 
 Game::Game() {
-  debug         = false;
-  mode          = DRAWING;
+  debug = false;
+  mode  = DRAWING;
+  skipUIRendering = false;
 
   currentToolIcon = LoadTextureFromImage(LoadImage("res/textures/icons/drawing.png"));
 
@@ -43,10 +44,29 @@ Game::Game() {
 
   placeLights(&lights);
 
+  // debugWindowData.flags |= ImGuiWindowFlags_NoTitleBar;
+  debugWindowData.flags |= ImGuiWindowFlags_NoScrollbar;
+  // debugWindowData.flags |= ImGuiWindowFlags_MenuBar;
+  debugWindowData.flags |= ImGuiWindowFlags_NoMove;
+  // debugWindowData.flags |= ImGuiWindowFlags_NoResize;
+  // debugWindowData.flags |= ImGuiWindowFlags_NoCollapse;
+  // debugWindowData.flags |= ImGuiWindowFlags_NoNav;
+  // debugWindowData.flags |= ImGuiWindowFlags_NoBackground;
+  // debugWindowData.flags |= ImGuiWindowFlags_NoBringToFrontOnFocus;
+  // debugWindowData.flags |= ImGuiWindowFlags_UnsavedDocument;
+
+  ImGuiIO& io = ImGui::GetIO();
+  ImGuiConfigFlags configFlags;
+  configFlags |= ImGuiConfigFlags_NoMouseCursorChange;
+  io.ConfigFlags = configFlags;
+
   HideCursor();
 }
 
 void Game::update() {
+  if      (brush.scale < 0.1) brush.scale = 0.1;
+  else if (brush.scale > 1.0) brush.scale = 1.0;
+
   time = GetTime();
   SetShaderValue(lightingShader,    GetShaderLocation(lightingShader, "uTime"), &time, SHADER_UNIFORM_FLOAT);
 
@@ -60,18 +80,22 @@ void Game::update() {
   int lightsAmount = lights.size();
   SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uLightsAmount"), &lightsAmount, SHADER_UNIFORM_INT);
   SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uCascadeAmount"), &cascadeAmount, SHADER_UNIFORM_INT);
-
-  int viewing = 0;
-  if (mode == VIEWING) viewing = 1;
   SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uViewing"), &viewing, SHADER_UNIFORM_INT);
 
   for (int i = 0; i < lights.size(); i++) {
     Vector2 position = lights[i].position * GetWindowScaleDPI();
-    float   radius    = lights[i].radius * GetWindowScaleDPI().x;
+    float   radius   = lights[i].radius * GetWindowScaleDPI().x;
     SetShaderValue(lightingShader, GetShaderLocation(lightingShader, TextFormat("lights[%i].position", i)), &position, SHADER_UNIFORM_VEC2);
     SetShaderValue(lightingShader, GetShaderLocation(lightingShader, TextFormat("lights[%i].color",    i)), &lights[i].color,    SHADER_UNIFORM_VEC3);
     SetShaderValue(lightingShader, GetShaderLocation(lightingShader, TextFormat("lights[%i].radius",   i)), &radius,   SHADER_UNIFORM_FLOAT);
    }
+
+  ImGuiIO& io = ImGui::GetIO();
+  if (!io.WantCaptureMouse) {
+    HideCursor();
+  } else {
+    ShowCursor();
+  }
 }
 
 void Game::render() {
@@ -82,19 +106,6 @@ void Game::render() {
     SetShaderValueTexture(lightingShader, GetShaderLocation(lightingShader, "uOcclusionMask"), canvas.tex);
     DrawTexture(canvas.tex, 0, 0, WHITE);
   EndShaderMode();
-}
-
-void Game::renderUI() {
-  float v = GetTime() - timeSinceModeSwitch;
-  if (v > 1.0) v = 1.0;
-
-  std::string str = "DRAWING";
-  if (mode == LIGHTING)     str = "LIGHTING";
-  else if (mode == VIEWING) str = "VIEWING";
-
-  DrawTexture(currentToolIcon, 0, SCREEN_HEIGHT-8, WHITE);
-
-  DrawText(str.c_str(), 12, SCREEN_HEIGHT - 8, 1, Color{255, 255, 255, static_cast<unsigned char>(255 - v*255)});
 
   switch (mode) {
     case DRAWING:
@@ -110,9 +121,45 @@ void Game::renderUI() {
         DrawCircleLinesV(lights[i].position, lights[i].radius / 64 * 2, GREEN);
        }
 
-      Color col    = ColorFromNormalized(Vector4{ std::sin(time), std::cos(time), 1.0, 0.5 });
-      DrawCircleLines(GetMouseX(), GetMouseY(), brush.scale*600, col);
+      // Color col    = ColorFromNormalized(Vector4{ std::sin(time), std::cos(time), 1.0, 0.5 });
+      DrawCircleLines(GetMouseX(), GetMouseY(), brush.scale*500, brush.color);
       break;
+  }
+
+}
+
+void Game::renderUI() {
+  if (skipUIRendering) return;
+
+  ImGui::SetNextWindowPos(ImVec2{4, 4});
+
+  std::string str = "Drawing";
+  if (mode == LIGHTING)     str = "Lighting";
+  else if (mode == VIEWING) str = "Viewing";
+
+  if (!ImGui::Begin(str.c_str(), &debugWindowData.open, debugWindowData.flags)) {
+    ImGui::End();
+  } else {
+    // ImGui::Text("%d FPS", GetFPS());
+    // ImGui::Text(str.c_str());
+    switch (mode) {
+      case DRAWING:
+        ImGui::SliderFloat("brush size", &brush.scale, 0.1f, 1.0f, "brush size = %.2f");
+        break;
+      case LIGHTING: {
+        ImGui::SliderFloat("light size", &brush.scale, 0.1f, 1.0f, "light size = %.2f");
+        //ImGui::Checkbox("Viewer mode", &random);
+        Vector4 col4 = ColorNormalize(brush.color);
+        float col[3] = { col4.x, col4.y, col4.z };
+        ImGui::ColorEdit3("light color", col);
+        brush.color = ColorFromNormalized(Vector4{col[0], col[1], col[2], 1.0});
+      }
+        break;
+      case VIEWING:
+        ImGui::Checkbox("Viewer mode", &viewing);
+        break;
+    }
+    ImGui::End();
   }
 
   DrawTextureEx(cursor.tex,
@@ -121,16 +168,6 @@ void Game::renderUI() {
                 0.0,
                 CURSOR_SIZE,
                 WHITE);
-
-  if (!debug) return;
-
-  DrawText(TextFormat("%i FPS",    GetFPS()),      0, 0,  1, GREEN);
-  DrawText(TextFormat("%i lights", lights.size()), 0, 8,  1, GREEN);
-
-  if      (mode == DRAWING)  DrawText(TextFormat("%f brush scale",           brush.scale),           0, 32, 1, GREEN);
-  else if (mode == LIGHTING) DrawText(TextFormat("%f light size (diameter)", brush.scale * 600 * 2), 0, 32, 1, GREEN);
-
-  DrawText(TextFormat("%i cascades", cascadeAmount), 0, 40, 1, GREEN);
 }
 
 void Game::processKeyboardInput() {
@@ -149,6 +186,7 @@ void Game::processKeyboardInput() {
   if (IsKeyPressed(KEY_TWO))   changeMode(LIGHTING);
   if (IsKeyPressed(KEY_THREE)) changeMode(VIEWING);
 
+  if (IsKeyPressed(KEY_F1))  skipUIRendering = !skipUIRendering;
   if (IsKeyPressed(KEY_F3))  debug = !debug;
   if (IsKeyPressed(KEY_F12)) {
     printf("Taking screenshot.\n");
@@ -195,6 +233,8 @@ void Game::processKeyboardInput() {
 }
 
 void Game::processMouseInput() {
+  if (ImGui::GetIO().WantCaptureMouse) return;
+
   if (IsKeyDown(KEY_LEFT_CONTROL) && debug) {
     int amp = 50;
     if (IsKeyDown(KEY_LEFT_SHIFT)) amp = 1;
@@ -202,7 +242,6 @@ void Game::processMouseInput() {
     if (cascadeAmount < 1) cascadeAmount = 1;
   } else {
     brush.scale += GetMouseWheelMove() / 100;
-    if (brush.scale < 0.1) brush.scale = 0.1;
   }
 
   if (IsMouseButtonDown(2)) {
@@ -241,8 +280,9 @@ void Game::processMouseInput() {
       if (IsMouseButtonPressed(0)) {
         Light l;
         l.position = MOUSE_VECTOR;
-        l.color    = Vector3{ std::sin(time), std::cos(time), 1.0 };
-        l.radius   = brush.scale * 600;
+        Vector4 col = ColorNormalize(brush.color);
+        l.color    = Vector3{col.x, col.y, col.z};
+        l.radius   = brush.scale * 500;
         lights.push_back(l);
       } else if (IsMouseButtonDown(1)) {
         for (int i = 0; i < lights.size(); i++) {

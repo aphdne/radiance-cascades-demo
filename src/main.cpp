@@ -1,5 +1,3 @@
-#include "raylib.h"
-#include "config.h"
 #include "game.h"
 
 int main() {
@@ -15,6 +13,7 @@ int main() {
   InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, title.c_str());
   SetTargetFPS(GetMonitorRefreshRate(GetCurrentMonitor()));
   SetTraceLogLevel(LOG_WARNING);
+  rlImGuiSetup(true);
 
   Game game;
 
@@ -25,9 +24,12 @@ int main() {
     game.update();
     BeginDrawing();
       game.render();
-      game.renderUI();
+      rlImGuiBegin();
+        game.renderUI();
+      rlImGuiEnd();
     EndDrawing();
   }
 
+  rlImGuiShutdown();
   CloseWindow();
 }

@@ -4,14 +4,21 @@
 #include <math.h>
 #include <iostream>
 #include <vector>
+#include "config.h"
 #include "raylib.h"
 #include "raymath.h"
-#include "config.h"
+#include "imgui.h"
+#include "rlImGui.h"
 
 struct Light {
   Vector2 position;
   Vector3 color;
   float   radius; // in pixels
+};
+
+struct DebugWindowData {
+  ImGuiWindowFlags flags = 0;
+  bool open              = true;
 };
 
 class Game {
@@ -31,9 +38,14 @@ class Game {
     float time;
     double timeSinceModeSwitch;
 
+    bool skipUIRendering;
+
     Texture2D currentToolIcon;
+    DebugWindowData debugWindowData;
 
     std::vector<Light> lights;
+
+    bool viewing = false;
 
     enum Mode {
       DRAWING,
@@ -50,6 +62,7 @@ class Game {
       Image     img;
       Texture2D tex;
       float     scale;
+      Color     color;
     } brush;
 
     struct {
