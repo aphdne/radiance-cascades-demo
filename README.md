@@ -3,7 +3,6 @@
 1. [Requirements](#requirements)
 2. [Setup (macOS, Linux)](#setup-macos-linux)
 3. [Setup (Windows)](#setup-windows-visual-studio)
-4. [Controls](#controls)
 
 2D lighting demo.
 
