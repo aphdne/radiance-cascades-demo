@@ -1,6 +1,6 @@
 #version 330 core
 
-#define VIEWER_OUT_OF_SIGHT_BRIGHTNESS 0.015
+#define VIEWER_OUT_OF_SIGHT_BRIGHTNESS 0.005
 #define VIEWER_GRADIENT_RADIUS         1000
 
 struct Light {

@@ -3,6 +3,8 @@
 
 #include <math.h>
 #include <iostream>
+#include <sstream>
+#include <cctype>
 #include <vector>
 #include "config.h"
 #include "raylib.h"
@@ -16,7 +18,7 @@ struct Light {
   float   radius; // in pixels
 };
 
-struct DebugWindowData {
+struct WindowData {
   ImGuiWindowFlags flags = 0;
   bool open              = true;
 };
@@ -30,6 +32,9 @@ class Game {
     void processKeyboardInput();
     void processMouseInput();
 
+    void reloadCanvas();
+    void clearCanvas();
+
   private:
     Shader lightingShader;
     int cascadeAmount;
@@ -39,9 +44,8 @@ class Game {
     double timeSinceModeSwitch;
 
     bool skipUIRendering;
-
-    Texture2D currentToolIcon;
-    DebugWindowData debugWindowData;
+    bool randomColor;
+    WindowData debugWindowData;
 
     std::vector<Light> lights;
 
@@ -69,6 +73,9 @@ class Game {
       Image img;
       Texture2D tex;
     } canvas;
+
+    int currentMap = 0;
+    const std::string maps[2] = { "maze.png", "trees.png" };
 };
 
 #endif /* GAME_H */
