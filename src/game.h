@@ -12,15 +12,28 @@
 #include "imgui.h"
 #include "rlImGui.h"
 
+enum LightType {
+  STATIC = 0,
+  SINE,
+  FLICKERING
+};
+
 struct Light {
-  Vector2 position;
-  Vector3 color;
-  float   radius; // in pixels
+  Vector2   position;
+  Vector3   color;
+  float     radius; // in pixels
+  float     timeCreated;
+  LightType type;
 };
 
 struct WindowData {
   ImGuiWindowFlags flags = 0;
   bool open              = true;
+};
+
+struct ImageTexture {
+  Image     img;
+  Texture2D tex;
 };
 
 class Game {
@@ -32,26 +45,32 @@ class Game {
     void processKeyboardInput();
     void processMouseInput();
 
+    void addLight(Vector2 positon, Vector3 normalisedColor, float radius, LightType type);
+    void placeLights(int lightNumber = 4, float distFromCentre = 256.0);
     void reloadCanvas();
     void clearCanvas();
 
   private:
     Shader lightingShader;
     int cascadeAmount;
-
-    bool debug;
     float time;
-    double timeSinceModeSwitch;
-
-    bool skipUIRendering;
-    bool randomColor;
     WindowData debugWindowData;
-
     std::vector<Light> lights;
 
-    bool viewing = false;
+    bool debug;
+    bool randomLightColor;
+    bool randomLightSize;
+    bool randomLightType;
+    bool perspective;
+    bool skipUIRendering;
 
-    enum Mode {
+    int currentMap = 0;
+    const std::string maps[2] = { "maze.png", "trees.png" };
+
+    ImageTexture canvas;
+    ImageTexture cursor;
+
+    enum {
       DRAWING,
       LIGHTING,
       VIEWING
@@ -60,22 +79,16 @@ class Game {
     struct {
       Image     img;
       Texture2D tex;
-    } cursor;
-
-    struct {
-      Image     img;
-      Texture2D tex;
-      float     scale;
-      Color     color;
+      float     brushSize;
+      float     lightSize;
+      Color     lightColor;
+      int       lightType;
     } brush;
 
     struct {
-      Image img;
-      Texture2D tex;
-    } canvas;
-
-    int currentMap = 0;
-    const std::string maps[2] = { "maze.png", "trees.png" };
+      float size;
+      Color color;
+    } light;
 };
 
 #endif /* GAME_H */

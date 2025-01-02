@@ -3,10 +3,18 @@
 #define VIEWER_OUT_OF_SIGHT_BRIGHTNESS 0.005
 #define VIEWER_GRADIENT_RADIUS         1000
 
+#define STATIC     0
+#define SINE       1
+#define FLICKERING 2
+
+#define PI 3.1415926535897932384626433
+
 struct Light {
   vec2  position;
   vec3  color;
   float radius;
+  float timeCreated; // doubles dont exist in this GLSL version
+  int   type;
 };
 
 in vec2 fragTexCoord;
@@ -24,6 +32,16 @@ uniform vec2 uPlayerLocation;
 // config
 uniform int uCascadeAmount; // the amount of cascades primarily affects performance & light leakage. Thicker walls = less cascades needed, thinner walls = more cascades needed
 uniform int uViewing;
+
+// sourced from https://gist.github.com/patriciogonzalezvivo/670c22f3966e662d2f83
+float hash(float n) { return fract(sin(n) * 1e4); }
+
+float noise(float x) {
+	float i = floor(x);
+	float f = fract(x);
+	float u = f * f * (3.0 - 2.0 * f);
+	return mix(hash(i), hash(i + 1.0), u);
+}
 
 // sourced from https://gist.github.com/companje/29408948f1e8be54dd5733a74ca49bb9
 float map(float value, float min1, float max1, float min2, float max2) {
@@ -50,47 +68,49 @@ float terrain(vec2 p, vec2 position, bool smoothShadows)
   return step(0.25, texture(uOcclusionMask, p).x); // hard shadows
 }
 
-vec3 calcVisibility(vec2 position, float gradientRadius, vec3 rgb, bool smoothShadows) {
+vec3 calcVisibility(Light l, bool smoothShadows) {
   // no need to bother calculating light if the light value will be overridden by the gradient anyway
-  if (distance(fragTexCoord*uResolution, position) > gradientRadius) return vec3(0);
+  if (distance(fragTexCoord*uResolution, l.position) > l.radius) return vec3(0);
 
   float brightness = 1.0;
 
-  vec2 normalisedPos = position/uResolution;
+  vec2 normalisedPos = l.position/uResolution;
 
   for (float j = 0.0; j < uCascadeAmount; j++) {
     float t = j / uCascadeAmount;
-    float h = terrain(mix(fragTexCoord, normalisedPos, t), position, smoothShadows);
+    float h = terrain(mix(fragTexCoord, normalisedPos, t), l.position, smoothShadows);
     brightness *= h;
   }
 
   // radial gradient - adapted from https://www.shadertoy.com/view/4tjSWh
-  brightness *= 1.0 - distance(vec2(position.x, uResolution.y - position.y), gl_FragCoord.xy) * 1/gradientRadius;
+  brightness *= 1.0 - distance(vec2(l.position.x, uResolution.y - l.position.y), gl_FragCoord.xy) * 1/l.radius;
+  if      (l.type == SINE)       brightness *= abs(sin(uTime - l.timeCreated));
+  else if (l.type == FLICKERING) brightness *= noise(uTime*2 - l.timeCreated);
 
-  return (brightness > 0) ? brightness * rgb : vec3(0);
+  return (brightness > 0) ? brightness * l.color : vec3(0);
 }
 
 void main() {
   vec3 result = vec3(0.0);
 
   for (int i = 0; i < uLightsAmount; i++) {
-    result += calcVisibility(lights[i].position, lights[i].radius, lights[i].color, true);
+    result += calcVisibility(lights[i], true);
   }
 
-  if (uViewing == 1) {
-    fragColor = vec4(
-      mix(
-        texture(uOcclusionMask, fragTexCoord).xyz * VIEWER_OUT_OF_SIGHT_BRIGHTNESS,
-        result.xyz,
-        calcVisibility(uPlayerLocation, VIEWER_GRADIENT_RADIUS, vec3(1.0), false)
-      ),
-      1.0
-    );
-  } else {
+  // if (uViewing == 1) {
+  //   fragColor = vec4(
+  //     mix(
+  //       texture(uOcclusionMask, fragTexCoord).xyz * VIEWER_OUT_OF_SIGHT_BRIGHTNESS,
+  //       result.xyz,
+  //       calcVisibility(uPlayerLocation, VIEWER_GRADIENT_RADIUS, vec3(1.0), 0, false)
+  //     ),
+  //     1.0
+  //   );
+  // } else {
     // combine light result w/ underlying occlusion mask texture
     fragColor = vec4(
       result * step(0.25, texture(uOcclusionMask, fragTexCoord)).xxx,
       1.0
     );
-  }
+  // }
 }
