@@ -24,6 +24,7 @@ Game::Game() {
 
   brush.lightSize = 128.0;
   brush.lightType = 0;
+  brush.lightColor = RANDOM_COLOR;
 
   cursor.img = LoadImage("res/textures/cursor.png");
   cursor.tex = LoadTextureFromImage(cursor.img);
@@ -133,7 +134,7 @@ void Game::renderUI() {
   float h = 100;
   if (mode == LIGHTING) h = 170;
   if (mode == VIEWING)  h = 70;
-  if (debug) h += 40;
+  if (debug) h += 55;
 
   ImGui::SetNextWindowSize(ImVec2{300, h});
   ImGui::SetNextWindowPos(ImVec2{4, 4});
@@ -151,6 +152,8 @@ void Game::renderUI() {
     if (debug) {
       ImGui::Text("%d FPS", GetFPS());
       ImGui::SliderInt("##cascade amount", &cascadeAmount, 1, 2048, "cascade amount = %i");
+      Vector4 c = ColorNormalize(brush.lightColor);
+      ImGui::Text("light seed = %f", (c.x + c.y + c.z) / 1.5 + 1);
     }
     ImGui::SeparatorText(str.c_str());
     switch (mode) {
@@ -169,7 +172,7 @@ void Game::renderUI() {
 
           ImGui::SliderFloat("light size", &brush.lightSize, MIN_LIGHT_SIZE, MAX_LIGHT_SIZE, "light size = %.0fpx");
 
-          ImGui::Combo("light type", &brush.lightType, "static\0sine\0flickering\0", 3);
+          ImGui::Combo("light type", &brush.lightType, "static\0sine\0saw\0noise\0", 3);
 
           if (ImGui::SmallButton("set random colour"))  brush.lightColor = RANDOM_COLOR;
           Vector4 col4 = ColorNormalize(brush.lightColor);
@@ -240,8 +243,10 @@ void Game::processKeyboardInput() {
   //   ChangeDirectory(pwd.c_str());
   // }
 
-  if (IsKeyPressed(KEY_R)) reloadCanvas();
   if (IsKeyPressed(KEY_C)) clearCanvas();
+  if (IsKeyPressed(KEY_R)) reloadCanvas();
+
+  // if (IsKeyPressed(KEY_F)) ToggleFullscreen();
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -258,18 +263,18 @@ void Game::processMouseInput() {
   if      (brush.lightSize < MIN_LIGHT_SIZE) brush.lightSize = MIN_LIGHT_SIZE;
   else if (brush.lightSize > MAX_LIGHT_SIZE) brush.lightSize = MAX_LIGHT_SIZE;
 
-
-  if (IsMouseButtonDown(2)) {
+  if (IsMouseButtonDown(2) || (IsKeyDown(KEY_LEFT_SHIFT) && IsMouseButtonDown(0))) {
     for (int i = 0; i < lights.size(); i++) {
       if (Vector2Length(lights[i].position - MOUSE_VECTOR) < 32) {
         lights[i].position = Vector2{ static_cast<float>(GetMouseX()), static_cast<float>(GetMouseY()) };
       }
     }
+    return;
   }
 
   switch (mode) {
     case DRAWING:
-      if (IsMouseButtonDown(0)) {
+      if (IsMouseButtonDown(0) && !IsKeyDown(KEY_LEFT_CONTROL)) {
         // draw
         ImageDraw(&canvas.img,
                   brush.img,
@@ -280,7 +285,7 @@ void Game::processMouseInput() {
                              static_cast<float>(brush.img.height * brush.brushSize) },
                   BLACK);
         RELOAD_CANVAS();
-      } else if (IsMouseButtonDown(1)) {
+      } else if (IsMouseButtonDown(1) || (IsKeyDown(KEY_LEFT_CONTROL) && IsMouseButtonDown(0))) {
         // erase
         ImageDraw(&canvas.img,
                   brush.img,
@@ -294,12 +299,12 @@ void Game::processMouseInput() {
       }
       break;
     case LIGHTING:
-      if (IsMouseButtonPressed(0)) {
+      if (IsMouseButtonPressed(0) && !IsKeyDown(KEY_LEFT_CONTROL)) {
         // place light
         Vector4 col = ColorNormalize(brush.lightColor);
         Vector3 color = Vector3{col.x, col.y, col.z};
         addLight(MOUSE_VECTOR, color, brush.lightSize, (LightType)brush.lightType);
-      } else if (IsMouseButtonDown(1)) {
+      } else if (IsMouseButtonDown(1) || (IsKeyDown(KEY_LEFT_CONTROL) && IsMouseButtonDown(0))) {
         // delete lights
         for (int i = 0; i < lights.size(); i++) {
           if (Vector2Length(lights[i].position - MOUSE_VECTOR) < 16) {

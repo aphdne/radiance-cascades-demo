@@ -3,9 +3,10 @@
 #define VIEWER_OUT_OF_SIGHT_BRIGHTNESS 0.005
 #define VIEWER_GRADIENT_RADIUS         1000
 
-#define STATIC     0
-#define SINE       1
-#define FLICKERING 2
+#define STATIC 0
+#define SINE   1
+#define SAW    2
+#define NOISE  3
 
 #define PI 3.1415926535897932384626433
 
@@ -82,10 +83,14 @@ vec3 calcVisibility(Light l, bool smoothShadows) {
     brightness *= h;
   }
 
+  // generate a seed from 1-3 based on the light's colour as the light's colour cannot change
+  float seed = (l.color.r + l.color.g + l.color.b) / 1.5 + 1;
+
   // radial gradient - adapted from https://www.shadertoy.com/view/4tjSWh
   brightness *= 1.0 - distance(vec2(l.position.x, uResolution.y - l.position.y), gl_FragCoord.xy) * 1/l.radius;
-  if      (l.type == SINE)       brightness *= abs(sin(uTime - l.timeCreated));
-  else if (l.type == FLICKERING) brightness *= noise(uTime*2 - l.timeCreated);
+  if      (l.type == SINE)  brightness *= abs(sin(uTime*seed/2 - l.timeCreated));
+  else if (l.type == SAW)   brightness *= (abs(sin(uTime*seed - l.timeCreated)) > 0.5 ) ? 0 : 1;
+  else if (l.type == NOISE) brightness *= noise(uTime*seed - l.timeCreated);
 
   return (brightness > 0) ? brightness * l.color : vec3(0);
 }
@@ -97,20 +102,26 @@ void main() {
     result += calcVisibility(lights[i], true);
   }
 
-  // if (uViewing == 1) {
-  //   fragColor = vec4(
-  //     mix(
-  //       texture(uOcclusionMask, fragTexCoord).xyz * VIEWER_OUT_OF_SIGHT_BRIGHTNESS,
-  //       result.xyz,
-  //       calcVisibility(uPlayerLocation, VIEWER_GRADIENT_RADIUS, vec3(1.0), 0, false)
-  //     ),
-  //     1.0
-  //   );
-  // } else {
+  if (uViewing == 1) {
+    Light player;
+    player.position = uPlayerLocation;
+    player.radius = VIEWER_GRADIENT_RADIUS;
+    player.color = vec3(1.0);
+    player.timeCreated = 0;
+    player.type = STATIC;
+    fragColor = vec4(
+      mix(
+        texture(uOcclusionMask, fragTexCoord).xyz * VIEWER_OUT_OF_SIGHT_BRIGHTNESS,
+        result.xyz,
+        calcVisibility(player, false)
+      ),
+      1.0
+    );
+  } else {
     // combine light result w/ underlying occlusion mask texture
     fragColor = vec4(
       result * step(0.25, texture(uOcclusionMask, fragTexCoord)).xxx,
       1.0
     );
-  // }
+  }
 }

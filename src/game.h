@@ -15,7 +15,8 @@
 enum LightType {
   STATIC = 0,
   SINE,
-  FLICKERING
+  SAW,
+  NOISE
 };
 
 struct Light {
