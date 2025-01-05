@@ -62,6 +62,7 @@ class Game {
     bool randomLightColor;
     bool randomLightSize;
     bool randomLightType;
+    double timeSinceLastType;
     bool perspective;
     bool skipUIRendering;
 

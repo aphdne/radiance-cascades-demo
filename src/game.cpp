@@ -11,7 +11,9 @@ Game::Game() {
   skipUIRendering = false;
   randomLightColor = false;
   randomLightSize  = false;
+  randomLightType  = false;
   perspective = false;
+  timeSinceLastType = GetTime();
 
   lightingShader = LoadShader(0, "res/shaders/lighting.frag");
   if (!IsShaderValid(lightingShader)) {
@@ -53,7 +55,7 @@ Game::Game() {
   HideCursor();
 }
 
-// ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 void Game::update() {
   time = GetTime();
@@ -82,7 +84,7 @@ void Game::update() {
     SetShaderValue(lightingShader, GetShaderLocation(lightingShader, TextFormat("lights[%i].radius",      i)), &radius,                SHADER_UNIFORM_FLOAT);
     SetShaderValue(lightingShader, GetShaderLocation(lightingShader, TextFormat("lights[%i].timeCreated", i)), &lights[i].timeCreated, SHADER_UNIFORM_FLOAT);
     SetShaderValue(lightingShader, GetShaderLocation(lightingShader, TextFormat("lights[%i].type", i)),        &lights[i].type,        SHADER_UNIFORM_INT);
-   }
+  }
 
   ImGuiIO& io = ImGui::GetIO();
   if (io.WantCaptureMouse) {
@@ -93,10 +95,24 @@ void Game::update() {
 
   if (randomLightColor) brush.lightColor = RANDOM_COLOR;
   if (randomLightSize)  brush.lightSize  = MIN_LIGHT_SIZE * 4 + std::abs(std::sin(time) * (MAX_LIGHT_SIZE/2 - MIN_LIGHT_SIZE));
-  if (randomLightType)  brush.lightType = static_cast<int>(std::abs(std::sin(time)) * 3);
+  if (randomLightType) {
+    float d = GetTime() - timeSinceLastType;
+    if (d <= 0.25) {
+      brush.lightType = STATIC;
+    } else if (d > 0.25 && d <= 0.5) {
+      brush.lightType = SINE;
+    } else if (d > 0.5 && d <= 0.75) {
+      brush.lightType = SAW;
+    } else if (d > 0.75 && d <= 1.0) {
+      brush.lightType = NOISE;
+    } else {
+      timeSinceLastType = GetTime();
+    }
+  }
+
 }
 
-// ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 void Game::render() {
   ClearBackground(PINK);
@@ -126,7 +142,7 @@ void Game::render() {
 
 }
 
-// ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 void Game::renderUI() {
   if (skipUIRendering) return;
@@ -142,9 +158,6 @@ void Game::renderUI() {
   std::string str = "Drawing";
   if (mode == LIGHTING)     str = "Lighting";
   else if (mode == VIEWING) str = "Viewing";
-
-  // ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4{0.2, 0.2, 0.2, 0.15});
-  // ImGui::PushStyleColor(ImGuiCol_Border, ImVec4{0.2, 0.2, 0.2, 0.15});
 
   if (!ImGui::Begin("Mode", &debugWindowData.open, debugWindowData.flags)) {
     ImGui::End();
@@ -197,34 +210,16 @@ void Game::renderUI() {
     ImGui::End();
   }
 
-  // ImGui::PopStyleColor();
-  // ImGui::PopStyleColor();
-
-  // if (debug) {
-  //   ImGui::SetNextWindowPos(ImVec2{4, 136});
-  //   ImGui::SetNextWindowSize(ImVec2{150, 142});
-  //
-  //   if (!ImGui::Begin("Debug", &debugWindowData.open, debugWindowData.flags)) {
-  //     ImGui::End();
-  //   } else {
-  //     ImGui::Text("%d FPS", GetFPS());
-  //     ImGui::Text("cascade amount: %i", cascadeAmount);
-  //     ImGui::SliderInt("##cascade amount", &cascadeAmount, 1, 2048, "%");
-  //
-  //     rlImGuiImageSize(&canvas.tex, 140, 70);
-  //     ImGui::End();
-  //   }
-  // }
-
   DrawTextureEx(cursor.tex,
                 Vector2{ (float)(GetMouseX() - cursor.img.width / 2 * CURSOR_SIZE),
                          (float)(GetMouseY() - cursor.img.height/ 2 * CURSOR_SIZE) },
                 0.0,
                 CURSOR_SIZE,
                 WHITE);
+
 }
 
-// ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 // FIX: screenshots arent saved in a specified directory, might need to adapt raylib's screenshot function
 void Game::processKeyboardInput() {
@@ -249,7 +244,7 @@ void Game::processKeyboardInput() {
   // if (IsKeyPressed(KEY_F)) ToggleFullscreen();
 }
 
-// ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 void Game::processMouseInput() {
   if (ImGui::GetIO().WantCaptureMouse) return;
@@ -350,7 +345,6 @@ void Game::reloadCanvas() {
       }
   } else if (mode == DRAWING) {
     printf("Replacing canvas.\n");
-    PRINT(maps[currentMap]);
     std::string filepath = "res/textures/canvas/" + maps[currentMap];
     canvas.img = LoadImage(filepath.c_str());
     RELOAD_CANVAS();
