@@ -12,10 +12,8 @@ Maze image texture initially generated via [mazegenerator.net](https://www.mazeg
 
 - CMake 3.25
     - A C++11 (or higher) compiler
-- Raylib 5.5 (optional)
-    - If Raylib is not [installed](https://github.com/raysan5/raylib#build-and-installation) on your machine, CMake will download and build Raylib for you in the build directory.
 
-This currently builds and runs on macOS, Arch Linux (on X11), and Windows. No planned support for Wayland :P
+This currently builds and runs on macOS Sequoia, Arch Linux (on X11), and Windows 11.
 
 ## Setup (macOS, Linux)
 
