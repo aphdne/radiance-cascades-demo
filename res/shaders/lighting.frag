@@ -53,13 +53,14 @@ float map(float value, float min1, float max1, float min2, float max2) {
 float terrain(vec2 p, vec2 position, bool smoothShadows)
 {
   if (smoothShadows) {
-    // increased opacity closer to the light source
+    // increased alpha closer to the light source
+    // lerp according to distance from light to fragment mapped to 0.7 - 1.0
     return mix(
       map(
         distance(position, gl_FragCoord.xy),
         0.0,
-        ((uResolution.x < uResolution.y) ? uResolution.y : uResolution.x) * 500,
-        0.9,
+        ((uResolution.x < uResolution.y) ? uResolution.y : uResolution.x),
+        0.7,
         1.0
       ),
       1.0,

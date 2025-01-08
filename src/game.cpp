@@ -3,41 +3,31 @@
 #define MOUSE_VECTOR Vector2{ static_cast<float>(GetMouseX()), static_cast<float>(GetMouseY()) }
 #define RELOAD_CANVAS() UnloadTexture(canvas.tex); \
                         canvas.tex = LoadTextureFromImage(canvas.img);
-#define RANDOM_COLOR ColorFromNormalized(Vector4{ (std::sin(time) + 1) / 2, (std::cos(time) + 1) / 2, (std::sin(time*2) + 1) / 2, 1.0 })
+#define RANDOM_COLOR ColorFromNormalized(Vector4{\
+                                              (std::sin(static_cast<float>(GetTime()))   + 1) / 2,\
+                                              (std::cos(static_cast<float>(GetTime()))   + 1) / 2,\
+                                              (std::sin(static_cast<float>(GetTime())*2) + 1) / 2,\
+                                              1.0 })
 
 Game::Game() {
-  debug = false;
-  mode  = DRAWING;
+  // user parameters
+  user.mode  = DRAWING;
+  perspective = false;
   skipUIRendering = false;
+
+  user.lightSize = 128.0;
+  user.lightType = 0; // STATIC
+  user.lightColor = RANDOM_COLOR;
+
   randomLightColor = false;
   randomLightSize  = false;
   randomLightType  = false;
-  perspective = false;
-  timeSinceLastType = GetTime();
+  timeSinceLastType = GetTime(); // for randomLightType cycling
 
-  lightingShader = LoadShader(0, "res/shaders/lighting.frag");
-  if (!IsShaderValid(lightingShader)) {
-    printf("lightingShader is broken!!\n");
-    UnloadShader(lightingShader);
-    lightingShader = LoadShader(0, "res/shaders/broken.frag");
-  }
+  // ui parameters
 
-  cascadeAmount = 512;
-
-  brush.lightSize = 128.0;
-  brush.lightType = 0;
-  brush.lightColor = RANDOM_COLOR;
-
-  cursor.img = LoadImage("res/textures/cursor.png");
-  cursor.tex = LoadTextureFromImage(cursor.img);
-
-  brush.img = LoadImage("res/textures/brush.png");
-  brush.tex = LoadTextureFromImage(brush.img);
-  brush.brushSize = 0.25;
-
-  std::string filepath = "res/textures/canvas/" + maps[currentMap];
-  canvas.img = LoadImage(filepath.c_str());
-  canvas.tex = LoadTextureFromImage(canvas.img);
+  debug = false;
+  help  = false;
 
   placeLights();
 
@@ -52,13 +42,37 @@ Game::Game() {
   ImGuiIO& io = ImGui::GetIO();
   io.IniFilename = NULL;
 
+  // resource loading
+
+  cursor.img = LoadImage("res/textures/cursor.png");
+  cursor.tex = LoadTextureFromImage(cursor.img);
+
+  user.brush.img = LoadImage("res/textures/user.png");
+  user.brush.tex = LoadTextureFromImage(user.brush.img);
+  user.brushSize = 0.25;
+
+  std::string filepath = "res/textures/canvas/" + maps[currentMap];
+  canvas.img = LoadImage(filepath.c_str());
+  canvas.tex = LoadTextureFromImage(canvas.img);
+
+  lightingShader = LoadShader(0, "res/shaders/lighting.frag");
+  if (!IsShaderValid(lightingShader)) {
+    printf("lightingShader is broken!!\n");
+    UnloadShader(lightingShader);
+    lightingShader = LoadShader(0, "res/shaders/broken.frag");
+  }
+
+  // misc
+
   HideCursor();
+  cascadeAmount = 512;
+
 }
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 void Game::update() {
-  time = GetTime();
+  float time = GetTime();
   SetShaderValue(lightingShader,    GetShaderLocation(lightingShader, "uTime"), &time, SHADER_UNIFORM_FLOAT);
 
   Vector2 resolution = { SCREEN_WIDTH, SCREEN_HEIGHT };
@@ -73,7 +87,7 @@ void Game::update() {
   SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uCascadeAmount"), &cascadeAmount, SHADER_UNIFORM_INT);
 
   int v = perspective;
-  if (mode != VIEWING) v = 0;
+  if (user.mode != VIEWING) v = 0;
   SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uViewing"), &v, SHADER_UNIFORM_INT);
 
   for (int i = 0; i < lights.size(); i++) {
@@ -93,18 +107,18 @@ void Game::update() {
     ImGui::SetMouseCursor(ImGuiMouseCursor_None);
   }
 
-  if (randomLightColor) brush.lightColor = RANDOM_COLOR;
-  if (randomLightSize)  brush.lightSize  = MIN_LIGHT_SIZE * 4 + std::abs(std::sin(time) * (MAX_LIGHT_SIZE/2 - MIN_LIGHT_SIZE));
+  if (randomLightColor) user.lightColor = RANDOM_COLOR;
+  if (randomLightSize)  user.lightSize  = MIN_LIGHT_SIZE * 4 + std::abs(std::sin(GetTime()) * (MAX_LIGHT_SIZE/2 - MIN_LIGHT_SIZE));
   if (randomLightType) {
     float d = GetTime() - timeSinceLastType;
     if (d <= 0.25) {
-      brush.lightType = STATIC;
+      user.lightType = STATIC;
     } else if (d > 0.25 && d <= 0.5) {
-      brush.lightType = SINE;
+      user.lightType = SINE;
     } else if (d > 0.5 && d <= 0.75) {
-      brush.lightType = SAW;
+      user.lightType = SAW;
     } else if (d > 0.75 && d <= 1.0) {
-      brush.lightType = NOISE;
+      user.lightType = NOISE;
     } else {
       timeSinceLastType = GetTime();
     }
@@ -123,20 +137,20 @@ void Game::render() {
     DrawTexture(canvas.tex, 0, 0, WHITE);
   EndShaderMode();
 
-  switch (mode) {
+  switch (user.mode) {
     case DRAWING:
-      DrawTextureEx(brush.tex,
-                    Vector2{ (float)(GetMouseX() - brush.tex.width  / 2 * brush.brushSize),
-                             (float)(GetMouseY() - brush.tex.height / 2 * brush.brushSize) },
+      DrawTextureEx(user.brush.tex,
+                    Vector2{ (float)(GetMouseX() - user.brush.tex.width  / 2 * user.brushSize),
+                             (float)(GetMouseY() - user.brush.tex.height / 2 * user.brushSize) },
                     0.0,
-                    brush.brushSize,
+                    user.brushSize,
                     Color{ 0, 0, 0, 128} );
       break;
     case LIGHTING:
       for (int i = 0; i < lights.size(); i++) {
         DrawCircleLinesV(lights[i].position, lights[i].radius / 64 * 2, GREEN);
        }
-      DrawCircleLines(GetMouseX(), GetMouseY(), brush.lightSize, brush.lightColor);
+      DrawCircleLines(GetMouseX(), GetMouseY(), user.lightSize, user.lightColor);
       break;
   }
 
@@ -148,50 +162,62 @@ void Game::renderUI() {
   if (skipUIRendering) return;
 
   float h = 100;
-  if (mode == LIGHTING) h = 170;
-  if (mode == VIEWING)  h = 70;
-  if (debug) h += 55;
+  if (user.mode == LIGHTING) h = 170;
+  if (user.mode == VIEWING)  h = 70;
+  if (debug) h += 78;
+  if (help)  h += 95;
 
   ImGui::SetNextWindowSize(ImVec2{300, h});
   ImGui::SetNextWindowPos(ImVec2{4, 4});
 
   std::string str = "Drawing";
-  if (mode == LIGHTING)     str = "Lighting";
-  else if (mode == VIEWING) str = "Viewing";
+  if (user.mode == LIGHTING)     str = "Lighting";
+  else if (user.mode == VIEWING) str = "Viewing";
 
   if (!ImGui::Begin("Mode", &debugWindowData.open, debugWindowData.flags)) {
     ImGui::End();
   } else {
     if (debug) {
+      ImGui::SeparatorText("Debug");
       ImGui::Text("%d FPS", GetFPS());
       ImGui::SliderInt("##cascade amount", &cascadeAmount, 1, 2048, "cascade amount = %i");
-      Vector4 c = ColorNormalize(brush.lightColor);
+      Vector4 c = ColorNormalize(user.lightColor);
       ImGui::Text("light seed = %f", (c.x + c.y + c.z) / 1.5 + 1);
     }
+
+    if (help) {
+      ImGui::SeparatorText("Help");
+      ImGui::Text("a basic 2D lighting demo\n");
+      ImGui::Spacing();
+      ImGui::Text("press 1, 2 or 3 to toggle between \ndrawing, lighting, and viewing mode");
+      ImGui::Spacing();
+      ImGui::Text("press ` for sneaky debug controls/info");
+    }
+
     ImGui::SeparatorText(str.c_str());
-    switch (mode) {
+    switch (user.mode) {
       case DRAWING: {
-          if (ImGui::SmallButton("(r)eload canvas")) reloadCanvas();
+          if (ImGui::SmallButton("(r)eload canvas")) reload();
           ImGui::SameLine();
-          if (ImGui::SmallButton("(c)lear canvas")) clearCanvas();
+          if (ImGui::SmallButton("(c)lear canvas")) clear();
           ImGui::Combo("canvas", &currentMap, "maze.png\0trees.png\0", 2);
-          ImGui::SliderFloat("brush size", &brush.brushSize, 0.1f, 1.0f, "brush size = %.2f");
+          ImGui::SliderFloat("brush size", &user.brushSize, 0.1f, 1.0f, "brush size = %.2f");
         }
         break;
       case LIGHTING: {
-          if (ImGui::SmallButton("(r)eload lights")) reloadCanvas();
+          if (ImGui::SmallButton("(r)eload lights")) reload();
           ImGui::SameLine();
-          if (ImGui::SmallButton("(c)lear lights")) clearCanvas();
+          if (ImGui::SmallButton("(c)lear lights")) clear();
 
-          ImGui::SliderFloat("light size", &brush.lightSize, MIN_LIGHT_SIZE, MAX_LIGHT_SIZE, "light size = %.0fpx");
+          ImGui::SliderFloat("light size", &user.lightSize, MIN_LIGHT_SIZE, MAX_LIGHT_SIZE, "light size = %.0fpx");
 
-          ImGui::Combo("light type", &brush.lightType, "static\0sine\0saw\0noise\0", 3);
+          ImGui::Combo("light type", &user.lightType, "static\0sine\0saw\0noise\0", 3);
 
-          if (ImGui::SmallButton("set random colour"))  brush.lightColor = RANDOM_COLOR;
-          Vector4 col4 = ColorNormalize(brush.lightColor);
+          if (ImGui::SmallButton("set random colour"))  user.lightColor = RANDOM_COLOR;
+          Vector4 col4 = ColorNormalize(user.lightColor);
           float col[3] = { col4.x, col4.y, col4.z };
           ImGui::ColorEdit3("light color", col);
-          brush.lightColor = ColorFromNormalized(Vector4{col[0], col[1], col[2], 1.0});
+          user.lightColor = ColorFromNormalized(Vector4{col[0], col[1], col[2], 1.0});
 
           ImGui::Text("toggle random...");
           if (ImGui::SmallButton("type")) randomLightType = !randomLightType;
@@ -210,12 +236,16 @@ void Game::renderUI() {
     ImGui::End();
   }
 
-  DrawTextureEx(cursor.tex,
-                Vector2{ (float)(GetMouseX() - cursor.img.width / 2 * CURSOR_SIZE),
-                         (float)(GetMouseY() - cursor.img.height/ 2 * CURSOR_SIZE) },
-                0.0,
-                CURSOR_SIZE,
-                WHITE);
+  // dont draw our custom cursor if we are mousing over the UI
+  ImGuiIO& io = ImGui::GetIO();
+  if (!io.WantCaptureMouse) {
+    DrawTextureEx(cursor.tex,
+                  Vector2{ (float)(GetMouseX() - cursor.img.width / 2 * CURSOR_SIZE),
+                           (float)(GetMouseY() - cursor.img.height/ 2 * CURSOR_SIZE) },
+                  0.0,
+                  CURSOR_SIZE,
+                  WHITE);
+  }
 
 }
 
@@ -223,9 +253,9 @@ void Game::renderUI() {
 
 // FIX: screenshots arent saved in a specified directory, might need to adapt raylib's screenshot function
 void Game::processKeyboardInput() {
-  if (IsKeyPressed(KEY_ONE))   mode = DRAWING;
-  if (IsKeyPressed(KEY_TWO))   mode = LIGHTING;
-  if (IsKeyPressed(KEY_THREE)) mode = VIEWING;
+  if (IsKeyPressed(KEY_ONE))   user.mode = DRAWING;
+  if (IsKeyPressed(KEY_TWO))   user.mode = LIGHTING;
+  if (IsKeyPressed(KEY_THREE)) user.mode = VIEWING;
 
   if (IsKeyPressed(KEY_GRAVE)) debug = !debug;
   if (IsKeyPressed(KEY_F1))    skipUIRendering = !skipUIRendering;
@@ -238,8 +268,9 @@ void Game::processKeyboardInput() {
   //   ChangeDirectory(pwd.c_str());
   // }
 
-  if (IsKeyPressed(KEY_C)) clearCanvas();
-  if (IsKeyPressed(KEY_R)) reloadCanvas();
+  if (IsKeyPressed(KEY_C)) clear();
+  if (IsKeyPressed(KEY_R)) reload();
+  if (IsKeyPressed(KEY_H)) help = !help;
 
   // if (IsKeyPressed(KEY_F)) ToggleFullscreen();
 }
@@ -247,16 +278,17 @@ void Game::processKeyboardInput() {
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 void Game::processMouseInput() {
+  // we do not want to be affecting the scene when we're clicking on the UI
   if (ImGui::GetIO().WantCaptureMouse) return;
 
-  if      (mode == DRAWING)  brush.brushSize += GetMouseWheelMove() / 100;
-  else if (mode == LIGHTING) brush.lightSize += GetMouseWheelMove() * 3;
+  if      (user.mode == DRAWING)  user.brushSize += GetMouseWheelMove() / 100;
+  else if (user.mode == LIGHTING) user.lightSize += GetMouseWheelMove() * 3;
 
-  if      (brush.brushSize < 0.1) brush.brushSize = 0.1;
-  else if (brush.brushSize > 1.0) brush.brushSize = 1.0;
+  if      (user.brushSize < 0.1) user.brushSize = 0.1;
+  else if (user.brushSize > 1.0) user.brushSize = 1.0;
 
-  if      (brush.lightSize < MIN_LIGHT_SIZE) brush.lightSize = MIN_LIGHT_SIZE;
-  else if (brush.lightSize > MAX_LIGHT_SIZE) brush.lightSize = MAX_LIGHT_SIZE;
+  if      (user.lightSize < MIN_LIGHT_SIZE) user.lightSize = MIN_LIGHT_SIZE;
+  else if (user.lightSize > MAX_LIGHT_SIZE) user.lightSize = MAX_LIGHT_SIZE;
 
   if (IsMouseButtonDown(2) || (IsKeyDown(KEY_LEFT_SHIFT) && IsMouseButtonDown(0))) {
     for (int i = 0; i < lights.size(); i++) {
@@ -267,28 +299,28 @@ void Game::processMouseInput() {
     return;
   }
 
-  switch (mode) {
+  switch (user.mode) {
     case DRAWING:
       if (IsMouseButtonDown(0) && !IsKeyDown(KEY_LEFT_CONTROL)) {
         // draw
         ImageDraw(&canvas.img,
-                  brush.img,
+                  user.brush.img,
                   Rectangle{ 0, 0, (float)canvas.img.width, (float)canvas.img.height },
-                  Rectangle{ static_cast<float>(GetMouseX() - brush.img.width  / 2 * brush.brushSize),
-                             static_cast<float>(GetMouseY() - brush.img.height / 2 * brush.brushSize),
-                             static_cast<float>(brush.img.width  * brush.brushSize),
-                             static_cast<float>(brush.img.height * brush.brushSize) },
+                  Rectangle{ static_cast<float>(GetMouseX() - user.brush.img.width  / 2 * user.brushSize),
+                             static_cast<float>(GetMouseY() - user.brush.img.height / 2 * user.brushSize),
+                             static_cast<float>(user.brush.img.width  * user.brushSize),
+                             static_cast<float>(user.brush.img.height * user.brushSize) },
                   BLACK);
         RELOAD_CANVAS();
       } else if (IsMouseButtonDown(1) || (IsKeyDown(KEY_LEFT_CONTROL) && IsMouseButtonDown(0))) {
         // erase
         ImageDraw(&canvas.img,
-                  brush.img,
+                  user.brush.img,
                   Rectangle{ 0, 0, (float)canvas.img.width, (float)canvas.img.height },
-                  Rectangle{ static_cast<float>(GetMouseX() - brush.img.width  / 2 * brush.brushSize),
-                             static_cast<float>(GetMouseY() - brush.img.height / 2 * brush.brushSize),
-                             static_cast<float>(brush.img.width  * brush.brushSize),
-                             static_cast<float>(brush.img.height * brush.brushSize) },
+                  Rectangle{ static_cast<float>(GetMouseX() - user.brush.img.width  / 2 * user.brushSize),
+                             static_cast<float>(GetMouseY() - user.brush.img.height / 2 * user.brushSize),
+                             static_cast<float>(user.brush.img.width  * user.brushSize),
+                             static_cast<float>(user.brush.img.height * user.brushSize) },
                   WHITE);
         RELOAD_CANVAS();
       }
@@ -296,9 +328,9 @@ void Game::processMouseInput() {
     case LIGHTING:
       if (IsMouseButtonPressed(0) && !IsKeyDown(KEY_LEFT_CONTROL)) {
         // place light
-        Vector4 col = ColorNormalize(brush.lightColor);
+        Vector4 col = ColorNormalize(user.lightColor);
         Vector3 color = Vector3{col.x, col.y, col.z};
-        addLight(MOUSE_VECTOR, color, brush.lightSize, (LightType)brush.lightType);
+        addLight(MOUSE_VECTOR, color, user.lightSize, (LightType)user.lightType);
       } else if (IsMouseButtonDown(1) || (IsKeyDown(KEY_LEFT_CONTROL) && IsMouseButtonDown(0))) {
         // delete lights
         for (int i = 0; i < lights.size(); i++) {
@@ -321,6 +353,7 @@ void Game::addLight(Vector2 position, Vector3 normalisedColor, float radius, Lig
   lights.push_back(l);
 }
 
+// place lights along an arbitray circle
 void Game::placeLights(int lightNumber, float distFromCentre) {
   for (float i = 0; i < lightNumber; i++) {
     float t = (i+1) * (PI*2/lightNumber) + 0.1;
@@ -333,7 +366,12 @@ void Game::placeLights(int lightNumber, float distFromCentre) {
   }
 }
 
-void Game::reloadCanvas() {
+// reload based on what mode we're in, unless we're press control
+// if we're pressing control we reload shaders
+//
+// DRAWING: load canvas image texture
+// LIGHTING: set lighting to how it is when the programme starts
+void Game::reload() {
   if (IsKeyDown(KEY_LEFT_CONTROL)) {
     // reloading
       printf("Reloading shaders.\n");
@@ -343,20 +381,25 @@ void Game::reloadCanvas() {
         UnloadShader(lightingShader);
         lightingShader = LoadShader(0, "res/shaders/broken.frag");
       }
-  } else if (mode == DRAWING) {
+  } else if (user.mode == DRAWING) {
     printf("Replacing canvas.\n");
     std::string filepath = "res/textures/canvas/" + maps[currentMap];
     canvas.img = LoadImage(filepath.c_str());
     RELOAD_CANVAS();
-  } else if (mode == LIGHTING) {
+  } else if (user.mode == LIGHTING) {
     printf("Replacing lights.\n");
     lights.clear();
     placeLights();
   }
 }
 
-void Game::clearCanvas() {
-  switch (mode) {
+// clear depending on what mode we're in
+//
+// DRAWING: clear canvas
+// LIGHTING: clear lights
+//
+void Game::clear() {
+  switch (user.mode) {
     case DRAWING:
       printf("Clearing canvas.\n");
       canvas.img = GenImageColor(SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);

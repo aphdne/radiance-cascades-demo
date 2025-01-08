@@ -1,10 +1,7 @@
 #ifndef GAME_H
 #define GAME_H
 
-#include <math.h>
 #include <iostream>
-#include <sstream>
-#include <cctype>
 #include <vector>
 #include "config.h"
 #include "raylib.h"
@@ -37,6 +34,12 @@ struct ImageTexture {
   Texture2D tex;
 };
 
+enum Mode {
+  DRAWING,
+  LIGHTING,
+  VIEWING
+};
+
 class Game {
   public:
     Game();
@@ -48,49 +51,45 @@ class Game {
 
     void addLight(Vector2 positon, Vector3 normalisedColor, float radius, LightType type);
     void placeLights(int lightNumber = 4, float distFromCentre = 256.0);
-    void reloadCanvas();
-    void clearCanvas();
+    void reload();
+    void clear();
 
   private:
-    Shader lightingShader;
-    int cascadeAmount;
-    float time;
-    WindowData debugWindowData;
-    std::vector<Light> lights;
+    // user
+    struct {
+      Mode         mode;
+      ImageTexture brush;
+      float        brushSize;
+      float        lightSize;
+      Color        lightColor;
+      int          lightType;
+    } user;
 
-    bool debug;
     bool randomLightColor;
     bool randomLightSize;
     bool randomLightType;
     double timeSinceLastType;
+
     bool perspective;
+
+    // ui
+    bool debug;
+    bool help;
+    WindowData debugWindowData;
     bool skipUIRendering;
 
-    int currentMap = 0;
+    std::vector<Light> lights;
+
     const std::string maps[2] = { "maze.png", "trees.png" };
 
+    // resources
+    int currentMap = 0;
+    Shader lightingShader;
     ImageTexture canvas;
     ImageTexture cursor;
 
-    enum {
-      DRAWING,
-      LIGHTING,
-      VIEWING
-    } mode;
-
-    struct {
-      Image     img;
-      Texture2D tex;
-      float     brushSize;
-      float     lightSize;
-      Color     lightColor;
-      int       lightType;
-    } brush;
-
-    struct {
-      float size;
-      Color color;
-    } light;
+    // misc
+    int cascadeAmount;
 };
 
 #endif /* GAME_H */
