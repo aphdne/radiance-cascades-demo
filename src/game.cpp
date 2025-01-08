@@ -27,7 +27,7 @@ Game::Game() {
   // ui parameters
 
   debug = false;
-  help  = false;
+  help  = true;
 
   placeLights();
 
@@ -47,7 +47,7 @@ Game::Game() {
   cursor.img = LoadImage("res/textures/cursor.png");
   cursor.tex = LoadTextureFromImage(cursor.img);
 
-  user.brush.img = LoadImage("res/textures/user.png");
+  user.brush.img = LoadImage("res/textures/brush.png");
   user.brush.tex = LoadTextureFromImage(user.brush.img);
   user.brushSize = 0.25;
 
@@ -165,7 +165,7 @@ void Game::renderUI() {
   if (user.mode == LIGHTING) h = 170;
   if (user.mode == VIEWING)  h = 70;
   if (debug) h += 78;
-  if (help)  h += 95;
+  if (help)  h += 115;
 
   ImGui::SetNextWindowSize(ImVec2{300, h});
   ImGui::SetNextWindowPos(ImVec2{4, 4});
@@ -191,7 +191,8 @@ void Game::renderUI() {
       ImGui::Spacing();
       ImGui::Text("press 1, 2 or 3 to toggle between \ndrawing, lighting, and viewing mode");
       ImGui::Spacing();
-      ImGui::Text("press ` for sneaky debug controls/info");
+      ImGui::Text("press (`) for sneaky debug controls/info");
+      ImGui::Text("press (h) to hide this text");
     }
 
     ImGui::SeparatorText(str.c_str());
