@@ -38,7 +38,7 @@ cd .. # run the resulting binary in the source directory, not the build director
 
 ## Setup (Windows Visual Studio)
 
-Clone the repository and...
+Clone the repository and run the following from a command prompt within the repository's directory:
 
 ```bash
 # grab our libraries
@@ -52,4 +52,6 @@ cmake ..
 
 This will generate a Visual Studio solution file (.sln) for you to use for compilation. Open this in Visual Studio and build it.
 
-You may get an "access is denied" error. This can be ignored. The resulting executable will be in `build/Debug`. Either run from or move the executable to the project root directory so that it can access the resources folder.
+You may get an "access is denied" error. This can be ignored. The resulting executable will be in `build/Debug`.
+
+Either **run from or move the executable to the project root directory so that it can access the resources folder**.
