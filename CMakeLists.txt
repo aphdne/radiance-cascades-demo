@@ -9,7 +9,7 @@ project(radiance_cascades VERSION 0.11.6.0)
 
 configure_file(src/config.h.in config.h)
 
-add_executable(${PROJECT_NAME} src/main.cpp src/game.cpp)
+add_executable(${PROJECT_NAME} src/main.cpp src/demo.cpp)
 
 add_subdirectory(lib)
 target_include_directories(radiance_cascades PUBLIC "${PROJECT_BINARY_DIR}" "${PROJECT_SOURCE_DIR}/lib/rlImGui" "${PROJECT_SOURCE_DIR}/lib/imgui")

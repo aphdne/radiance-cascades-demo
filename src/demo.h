@@ -1,5 +1,5 @@
-#ifndef GAME_H
-#define GAME_H
+#ifndef DEMO_H
+#define DEMO_H
 
 #include <iostream>
 #include <vector>
@@ -40,21 +40,21 @@ enum Mode {
   VIEWING
 };
 
-class Game {
+class Demo {
   public:
-    Game();
+    Demo();
     void update();
     void render();
     void renderUI();
     void processKeyboardInput();
     void processMouseInput();
-
-    void addLight(Vector2 positon, Vector3 normalisedColor, float radius, LightType type);
-    void placeLights(int lightNumber = 4, float distFromCentre = 256.0);
-    void reload();
     void clear();
 
   private:
+    void addLight(Vector2 position, Vector3 normalisedColor, float radius, LightType type);
+    void placeLights(int lightNumber = 4, float distFromCentre = 256.0);
+    void reload();
+
     // user
     struct {
       Mode         mode;
@@ -92,4 +92,4 @@ class Game {
     int cascadeAmount;
 };
 
-#endif /* GAME_H */
+#endif /* DEMO_H */

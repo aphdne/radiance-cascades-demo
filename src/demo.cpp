@@ -1,4 +1,4 @@
-#include "game.h"
+#include "demo.h"
 
 #define MOUSE_VECTOR Vector2{ static_cast<float>(GetMouseX()), static_cast<float>(GetMouseY()) }
 #define RELOAD_CANVAS() UnloadTexture(canvas.tex); \
@@ -9,7 +9,7 @@
                                               (std::sin(static_cast<float>(GetTime())*2) + 1) / 2,\
                                               1.0 })
 
-Game::Game() {
+Demo::Demo() {
   // user parameters
   user.mode  = DRAWING;
   perspective = false;
@@ -71,7 +71,7 @@ Game::Game() {
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void Game::update() {
+void Demo::update() {
   float time = GetTime();
   SetShaderValue(lightingShader,    GetShaderLocation(lightingShader, "uTime"), &time, SHADER_UNIFORM_FLOAT);
 
@@ -128,7 +128,7 @@ void Game::update() {
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void Game::render() {
+void Demo::render() {
   ClearBackground(PINK);
 
   BeginShaderMode(lightingShader);
@@ -158,7 +158,7 @@ void Game::render() {
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void Game::renderUI() {
+void Demo::renderUI() {
   if (skipUIRendering) return;
 
   float h = 100;
@@ -253,7 +253,7 @@ void Game::renderUI() {
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 // FIX: screenshots arent saved in a specified directory, might need to adapt raylib's screenshot function
-void Game::processKeyboardInput() {
+void Demo::processKeyboardInput() {
   if (IsKeyPressed(KEY_ONE))   user.mode = DRAWING;
   if (IsKeyPressed(KEY_TWO))   user.mode = LIGHTING;
   if (IsKeyPressed(KEY_THREE)) user.mode = VIEWING;
@@ -278,7 +278,7 @@ void Game::processKeyboardInput() {
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void Game::processMouseInput() {
+void Demo::processMouseInput() {
   // we do not want to be affecting the scene when we're clicking on the UI
   if (ImGui::GetIO().WantCaptureMouse) return;
 
@@ -344,7 +344,7 @@ void Game::processMouseInput() {
   }
 }
 
-void Game::addLight(Vector2 position, Vector3 normalisedColor, float radius, LightType type) {
+void Demo::addLight(Vector2 position, Vector3 normalisedColor, float radius, LightType type) {
   Light l;
   l.position    = position;
   l.color       = normalisedColor;
@@ -355,7 +355,7 @@ void Game::addLight(Vector2 position, Vector3 normalisedColor, float radius, Lig
 }
 
 // place lights along an arbitray circle
-void Game::placeLights(int lightNumber, float distFromCentre) {
+void Demo::placeLights(int lightNumber, float distFromCentre) {
   for (float i = 0; i < lightNumber; i++) {
     float t = (i+1) * (PI*2/lightNumber) + 0.1;
     addLight(
@@ -372,7 +372,7 @@ void Game::placeLights(int lightNumber, float distFromCentre) {
 //
 // DRAWING: load canvas image texture
 // LIGHTING: set lighting to how it is when the programme starts
-void Game::reload() {
+void Demo::reload() {
   if (IsKeyDown(KEY_LEFT_CONTROL)) {
     // reloading
       printf("Reloading shaders.\n");
@@ -399,7 +399,7 @@ void Game::reload() {
 // DRAWING: clear canvas
 // LIGHTING: clear lights
 //
-void Game::clear() {
+void Demo::clear() {
   switch (user.mode) {
     case DRAWING:
       printf("Clearing canvas.\n");

@@ -1,4 +1,4 @@
-#include "game.h"
+#include "demo.h"
 
 int main() {
   if (!DirectoryExists("res")) {
@@ -15,17 +15,17 @@ int main() {
   SetTraceLogLevel(LOG_WARNING);
   rlImGuiSetup(true);
 
-  Game game;
+  Demo demo;
 
   while (!WindowShouldClose())
   {
-    game.processKeyboardInput();
-    game.processMouseInput();
-    game.update();
+    demo.processKeyboardInput();
+    demo.processMouseInput();
+    demo.update();
     BeginDrawing();
-      game.render();
+      demo.render();
       rlImGuiBegin();
-        game.renderUI();
+        demo.renderUI();
       rlImGuiEnd();
     EndDrawing();
   }
