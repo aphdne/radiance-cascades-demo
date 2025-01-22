@@ -85,6 +85,7 @@ class Demo {
     // resources
     int currentMap = 0;
     Shader lightingShader;
+    Shader prepShader;
     ImageTexture canvas;
     ImageTexture cursor;
 

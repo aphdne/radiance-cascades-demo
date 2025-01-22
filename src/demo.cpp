@@ -48,6 +48,17 @@ Demo::Demo() {
   cursor.tex = LoadTextureFromImage(cursor.img);
 
   user.brush.img = LoadImage("res/textures/brush.png");
+
+  for (int x = 0; x < user.brush.img.width; x++) {
+    for (int y = 0; y < user.brush.img.height; y++) {
+      if (GetImageColor(user.brush.img, x, y).a <= 0.25) {
+        ImageDrawPixel(&user.brush.img, x, y, Color{0, 0, 0, 0});
+      } else {
+        ImageDrawPixel(&user.brush.img, x, y, WHITE);
+      }
+    }
+  }
+
   user.brush.tex = LoadTextureFromImage(user.brush.img);
   user.brushSize = 0.25;
 
@@ -55,11 +66,19 @@ Demo::Demo() {
   canvas.img = LoadImage(filepath.c_str());
   canvas.tex = LoadTextureFromImage(canvas.img);
 
-  lightingShader = LoadShader(0, "res/shaders/lighting.frag");
+  // lightingShader = LoadShader(0, "res/shaders/old-lighting.frag");
+  lightingShader = LoadShader(0, "res/shaders/jfa.frag");
   if (!IsShaderValid(lightingShader)) {
     printf("lightingShader is broken!!\n");
     UnloadShader(lightingShader);
     lightingShader = LoadShader(0, "res/shaders/broken.frag");
+  }
+
+  prepShader = LoadShader(0, "res/shaders/prep.frag");
+  if (!IsShaderValid(prepShader)) {
+    printf("prepShader is broken!!\n");
+    UnloadShader(prepShader);
+    prepShader = LoadShader(0, "res/shaders/broken.frag");
   }
 
   // misc
@@ -131,29 +150,49 @@ void Demo::update() {
 void Demo::render() {
   ClearBackground(PINK);
 
-  BeginShaderMode(lightingShader);
-    // <!> SetShaderValueTexture() has to be called while the shader is enabled
-    SetShaderValueTexture(lightingShader, GetShaderLocation(lightingShader, "uOcclusionMask"), canvas.tex);
-    DrawTexture(canvas.tex, 0, 0, WHITE);
-  EndShaderMode();
+  // first render pass for JFA
+  RenderTexture2D fbo = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
+  BeginTextureMode(fbo);
+    BeginShaderMode(prepShader);
+      SetShaderValueTexture(prepShader, GetShaderLocation(prepShader, "uCanvas"), canvas.tex);
+      DrawTexture(canvas.tex, 0, 0, WHITE);
+    EndShaderMode();
+  EndTextureMode();
 
-  switch (user.mode) {
-    case DRAWING:
+  // second render pass for JFA
+  int j = 128;
+  int firstJump = 1;
+  while (j >= 1) {
+    BeginShaderMode(lightingShader);
+      // <!> SetShaderValueTexture() has to be called while the shader is enabled
+      SetShaderValueTexture(lightingShader, GetShaderLocation(lightingShader, "uCanvas"), fbo.texture);
+      SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uJump"),      &j,         SHADER_UNIFORM_INT);
+      SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uFirstJump"), &firstJump, SHADER_UNIFORM_INT);
+      DrawTexture(fbo.texture, 0, 0, WHITE);
+    EndShaderMode();
+
+    firstJump = 0;
+    j /= 2;
+  }
+
+  // switch (user.mode) {
+  //   case DRAWING:
       DrawTextureEx(user.brush.tex,
                     Vector2{ (float)(GetMouseX() - user.brush.tex.width  / 2 * user.brushSize),
                              (float)(GetMouseY() - user.brush.tex.height / 2 * user.brushSize) },
                     0.0,
                     user.brushSize,
                     Color{ 0, 0, 0, 128} );
-      break;
-    case LIGHTING:
-      for (int i = 0; i < lights.size(); i++) {
-        DrawCircleLinesV(lights[i].position, lights[i].radius / 64 * 2, GREEN);
-       }
-      DrawCircleLines(GetMouseX(), GetMouseY(), user.lightSize, user.lightColor);
-      break;
-  }
+      // break;
+  //   case LIGHTING:
+  //     for (int i = 0; i < lights.size(); i++) {
+  //       DrawCircleLinesV(lights[i].position, lights[i].radius / 64 * 2, GREEN);
+  //      }
+  //     DrawCircleLines(GetMouseX(), GetMouseY(), user.lightSize, user.lightColor);
+  //     break;
+  // }
 
+  UnloadRenderTexture(fbo);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -282,8 +321,9 @@ void Demo::processMouseInput() {
   // we do not want to be affecting the scene when we're clicking on the UI
   if (ImGui::GetIO().WantCaptureMouse) return;
 
-  if      (user.mode == DRAWING)  user.brushSize += GetMouseWheelMove() / 100;
-  else if (user.mode == LIGHTING) user.lightSize += GetMouseWheelMove() * 3;
+  // if      (user.mode == DRAWING)  user.brushSize += GetMouseWheelMove() / 100;
+  // else if (user.mode == LIGHTING) user.lightSize += GetMouseWheelMove() * 3;
+  user.brushSize += GetMouseWheelMove() / 100;
 
   if      (user.brushSize < 0.1) user.brushSize = 0.1;
   else if (user.brushSize > 1.0) user.brushSize = 1.0;
@@ -327,19 +367,43 @@ void Demo::processMouseInput() {
       }
       break;
     case LIGHTING:
-      if (IsMouseButtonPressed(0) && !IsKeyDown(KEY_LEFT_CONTROL)) {
-        // place light
-        Vector4 col = ColorNormalize(user.lightColor);
-        Vector3 color = Vector3{col.x, col.y, col.z};
-        addLight(MOUSE_VECTOR, color, user.lightSize, (LightType)user.lightType);
+      if (IsMouseButtonDown(0) && !IsKeyDown(KEY_LEFT_CONTROL)) {
+        // draw
+        ImageDraw(&canvas.img,
+                  user.brush.img,
+                  Rectangle{ 0, 0, (float)canvas.img.width, (float)canvas.img.height },
+                  Rectangle{ static_cast<float>(GetMouseX() - user.brush.img.width  / 2 * user.brushSize),
+                             static_cast<float>(GetMouseY() - user.brush.img.height / 2 * user.brushSize),
+                             static_cast<float>(user.brush.img.width  * user.brushSize),
+                             static_cast<float>(user.brush.img.height * user.brushSize) },
+                  user.lightColor);
+        RELOAD_CANVAS();
       } else if (IsMouseButtonDown(1) || (IsKeyDown(KEY_LEFT_CONTROL) && IsMouseButtonDown(0))) {
-        // delete lights
-        for (int i = 0; i < lights.size(); i++) {
-          if (Vector2Length(lights[i].position - MOUSE_VECTOR) < 16) {
-            lights.erase(lights.begin() + i);
-          }
-        }
+        // erase
+        ImageDraw(&canvas.img,
+                  user.brush.img,
+                  Rectangle{ 0, 0, (float)canvas.img.width, (float)canvas.img.height },
+                  Rectangle{ static_cast<float>(GetMouseX() - user.brush.img.width  / 2 * user.brushSize),
+                             static_cast<float>(GetMouseY() - user.brush.img.height / 2 * user.brushSize),
+                             static_cast<float>(user.brush.img.width  * user.brushSize),
+                             static_cast<float>(user.brush.img.height * user.brushSize) },
+                  WHITE);
+        RELOAD_CANVAS();
       }
+      break;
+      // if (IsMouseButtonPressed(0) && !IsKeyDown(KEY_LEFT_CONTROL)) {
+      //   // place light
+      //   Vector4 col = ColorNormalize(user.lightColor);
+      //   Vector3 color = Vector3{col.x, col.y, col.z};
+      //   addLight(MOUSE_VECTOR, color, user.lightSize, (LightType)user.lightType);
+      // } else if (IsMouseButtonDown(1) || (IsKeyDown(KEY_LEFT_CONTROL) && IsMouseButtonDown(0))) {
+      //   // delete lights
+      //   for (int i = 0; i < lights.size(); i++) {
+      //     if (Vector2Length(lights[i].position - MOUSE_VECTOR) < 16) {
+      //       lights.erase(lights.begin() + i);
+      //     }
+      //   }
+      // }
     break;
   }
 }
@@ -377,7 +441,7 @@ void Demo::reload() {
     // reloading
       printf("Reloading shaders.\n");
       UnloadShader(lightingShader);
-      lightingShader = LoadShader(0, "res/shaders/lighting.frag");
+      lightingShader = LoadShader(0, "res/shaders/jfa.frag");
       if (!IsShaderValid(lightingShader)) {
         UnloadShader(lightingShader);
         lightingShader = LoadShader(0, "res/shaders/broken.frag");
