@@ -1,50 +1,31 @@
 #version 330 core
 
-in vec2 fragTexCoord;
-
 out vec4 fragColor;
 
 uniform sampler2D uCanvas;
-uniform int uJump;
-uniform int uFirstJump;
+uniform int uJumpSize;
 uniform vec2 uResolution;
 
-//Center RG value
-#define CENTER 127.0/255.0
-//RG value range
-#define RANGE  255.0
-
 void main() {
-  fragColor = vec4(0.0);
-  // fragColor = vec4(0.0);
+  /*
+   * for a pixel at (x, y), we gather a maximum of nine seeds stored with pixels (x + i, y + j)
+   * where i, j ∈ {-1, 0, 1} to decide which is the closest seed known so far to the pixel.
+   * the closest seed found for each pixel is written into the texture for the next round.
+   */
 
-  float bestdist = 9999.0;
+  vec2 fragCoord = gl_FragCoord.xy/uResolution; // for some reason fragTexCoord is just upside down sometimes? Raylib issue
+  float closest = 9999.0;
   for (int Nx = -1; Nx <= 1; Nx++) {
     for (int Ny = -1; Ny <= 1; Ny++) {
-      vec2 off = (vec2(Nx, Ny) * uJump) / uResolution;
-      vec2 Ncoord = fragTexCoord + off;
-      if (Ncoord != clamp(Ncoord, 0.0, 1.0)) continue; // skip outside texture coordinates
+      vec2 NTexCoord = (vec2(Nx, Ny) * uJumpSize) / uResolution;
+      vec4 Nsample = texture(uCanvas, fragCoord + NTexCoord);
 
-      vec4 Ntexture = texture(uCanvas, Ncoord);
+      if (Nx == 0 && Ny == 0 && Nsample.a >= 1.0) continue;
 
-      if (Nx == 0 && Ny == 0 && Ntexture.a == 1.0) {
-        fragColor = Ntexture;
-        return;
-      }
-
-      // vec2 tex_off = (Ntexture.xy - CENTER) * vec2(Ntexture.a < 1.0) + off;
-      // float tex_dist = length(tex_off);
-      //
-      // if (dist > tex_dist && (uFirstJump == 0 || Ntexture.a >= 1.0)) {
-      //   fragColor.xy = tex_off + CENTER;
-      //   dist = tex_dist;
-      //   fragColor.a = 1.0 - tex_dist * 3.0;
-      // }
-
-      float d = length(Ntexture.xy - fragTexCoord);
-      if (bestdist < d && uFirstJump == 0) {
-        bestdist = d;
-        fragColor = vec4(Ntexture.xy, 0.0, 1.0);
+      float d = distance(Nsample.rg, fragCoord);
+      if (d < closest) {
+        closest = d;
+        fragColor = vec4(Nsample.rg, d, 1.0);
       }
     }
   }

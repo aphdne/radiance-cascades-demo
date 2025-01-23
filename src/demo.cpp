@@ -66,12 +66,19 @@ Demo::Demo() {
   canvas.img = LoadImage(filepath.c_str());
   canvas.tex = LoadTextureFromImage(canvas.img);
 
-  // lightingShader = LoadShader(0, "res/shaders/old-lighting.frag");
-  lightingShader = LoadShader(0, "res/shaders/jfa.frag");
-  if (!IsShaderValid(lightingShader)) {
-    printf("lightingShader is broken!!\n");
-    UnloadShader(lightingShader);
-    lightingShader = LoadShader(0, "res/shaders/broken.frag");
+  rcShader = LoadShader(0, "res/shaders/rc.frag");
+  if (!IsShaderValid(rcShader)) {
+    printf("rcShader is broken!!\n");
+    UnloadShader(jfaShader);
+    rcShader = LoadShader(0, "res/shaders/broken.frag");
+  }
+
+  // jfaShader = LoadShader(0, "res/shaders/old-lighting.frag");
+  jfaShader = LoadShader(0, "res/shaders/jfa.frag");
+  if (!IsShaderValid(jfaShader)) {
+    printf("jfaShader is broken!!\n");
+    UnloadShader(jfaShader);
+    jfaShader = LoadShader(0, "res/shaders/broken.frag");
   }
 
   prepShader = LoadShader(0, "res/shaders/prep.frag");
@@ -91,58 +98,6 @@ Demo::Demo() {
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 void Demo::update() {
-  float time = GetTime();
-  SetShaderValue(lightingShader,    GetShaderLocation(lightingShader, "uTime"), &time, SHADER_UNIFORM_FLOAT);
-
-  Vector2 resolution = { SCREEN_WIDTH, SCREEN_HEIGHT };
-  resolution *= GetWindowScaleDPI();
-  SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
-
-  Vector2 mouse = MOUSE_VECTOR * GetWindowScaleDPI();
-  SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uPlayerLocation"), &mouse, SHADER_UNIFORM_VEC2);
-
-  int lightsAmount = lights.size();
-  SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uLightsAmount"), &lightsAmount, SHADER_UNIFORM_INT);
-  SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uCascadeAmount"), &cascadeAmount, SHADER_UNIFORM_INT);
-
-  int v = perspective;
-  if (user.mode != VIEWING) v = 0;
-  SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uViewing"), &v, SHADER_UNIFORM_INT);
-
-  for (int i = 0; i < lights.size(); i++) {
-    Vector2 position = lights[i].position * GetWindowScaleDPI();
-    float   radius   = lights[i].radius * GetWindowScaleDPI().x;
-    SetShaderValue(lightingShader, GetShaderLocation(lightingShader, TextFormat("lights[%i].position",    i)), &position,              SHADER_UNIFORM_VEC2);
-    SetShaderValue(lightingShader, GetShaderLocation(lightingShader, TextFormat("lights[%i].color",       i)), &lights[i].color,       SHADER_UNIFORM_VEC3);
-    SetShaderValue(lightingShader, GetShaderLocation(lightingShader, TextFormat("lights[%i].radius",      i)), &radius,                SHADER_UNIFORM_FLOAT);
-    SetShaderValue(lightingShader, GetShaderLocation(lightingShader, TextFormat("lights[%i].timeCreated", i)), &lights[i].timeCreated, SHADER_UNIFORM_FLOAT);
-    SetShaderValue(lightingShader, GetShaderLocation(lightingShader, TextFormat("lights[%i].type", i)),        &lights[i].type,        SHADER_UNIFORM_INT);
-  }
-
-  ImGuiIO& io = ImGui::GetIO();
-  if (io.WantCaptureMouse) {
-    ImGui::SetMouseCursor(ImGuiMouseCursor_Arrow);
-  } else {
-    ImGui::SetMouseCursor(ImGuiMouseCursor_None);
-  }
-
-  if (randomLightColor) user.lightColor = RANDOM_COLOR;
-  if (randomLightSize)  user.lightSize  = MIN_LIGHT_SIZE * 4 + std::abs(std::sin(GetTime()) * (MAX_LIGHT_SIZE/2 - MIN_LIGHT_SIZE));
-  if (randomLightType) {
-    float d = GetTime() - timeSinceLastType;
-    if (d <= 0.25) {
-      user.lightType = STATIC;
-    } else if (d > 0.25 && d <= 0.5) {
-      user.lightType = SINE;
-    } else if (d > 0.5 && d <= 0.75) {
-      user.lightType = SAW;
-    } else if (d > 0.75 && d <= 1.0) {
-      user.lightType = NOISE;
-    } else {
-      timeSinceLastType = GetTime();
-    }
-  }
-
 }
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -150,30 +105,44 @@ void Demo::update() {
 void Demo::render() {
   ClearBackground(PINK);
 
+  RenderTexture2D bufferA = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
+  RenderTexture2D bufferB = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
+  RenderTexture2D bufferC = bufferA;
+
+  // for shader uniforms
+  Vector2 resolution = { SCREEN_WIDTH, SCREEN_HEIGHT };
+  resolution *= GetWindowScaleDPI();
+
   // first render pass for JFA
-  RenderTexture2D fbo = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
-  BeginTextureMode(fbo);
+  // create UV mask w/ prep shader
+  BeginTextureMode(bufferA);
     BeginShaderMode(prepShader);
       SetShaderValueTexture(prepShader, GetShaderLocation(prepShader, "uCanvas"), canvas.tex);
+      SetShaderValue(prepShader, GetShaderLocation(prepShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
       DrawTexture(canvas.tex, 0, 0, WHITE);
     EndShaderMode();
   EndTextureMode();
 
-  // second render pass for JFA
-  int j = 128;
-  int firstJump = 1;
-  while (j >= 1) {
-    BeginShaderMode(lightingShader);
-      // <!> SetShaderValueTexture() has to be called while the shader is enabled
-      SetShaderValueTexture(lightingShader, GetShaderLocation(lightingShader, "uCanvas"), fbo.texture);
-      SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uJump"),      &j,         SHADER_UNIFORM_INT);
-      SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uFirstJump"), &firstJump, SHADER_UNIFORM_INT);
-      DrawTexture(fbo.texture, 0, 0, WHITE);
-    EndShaderMode();
+  for (int j = cascadeAmount; j >= 1; j /= 2) {
+    bufferC = bufferA;
+    bufferA = bufferB;
+    bufferB = bufferC;
 
-    firstJump = 0;
-    j /= 2;
+    BeginTextureMode(bufferA);
+      BeginShaderMode(jfaShader);
+        SetShaderValueTexture(jfaShader, GetShaderLocation(jfaShader, "uCanvas"), bufferB.texture);
+        SetShaderValue(jfaShader, GetShaderLocation(jfaShader, "uJumpSize"), &j, SHADER_UNIFORM_INT);
+        SetShaderValue(jfaShader, GetShaderLocation(jfaShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
+        DrawTexture(bufferB.texture, 0, 0, WHITE);
+      EndShaderMode();
+    EndTextureMode();
   }
+
+  // display bufferA to main framebuffer
+  BeginShaderMode(rcShader);
+    SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uCanvas"), bufferA.texture);
+    DrawTexture(bufferA.texture, 0, 0, WHITE);
+  EndShaderMode();
 
   // switch (user.mode) {
   //   case DRAWING:
@@ -192,7 +161,9 @@ void Demo::render() {
   //     break;
   // }
 
-  UnloadRenderTexture(fbo);
+  UnloadRenderTexture(bufferA);
+  UnloadRenderTexture(bufferB);
+  UnloadRenderTexture(bufferC);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -219,11 +190,12 @@ void Demo::renderUI() {
     if (debug) {
       ImGui::SeparatorText("Debug");
       ImGui::Text("%d FPS", GetFPS());
-      ImGui::SliderInt("##cascade amount", &cascadeAmount, 1, 2048, "cascade amount = %i");
+      ImGui::SliderInt("##cascade amount", &cascadeAmount, 1, 128, "cascade amount = %i");
       Vector4 c = ColorNormalize(user.lightColor);
       ImGui::Text("light seed = %f", (c.x + c.y + c.z) / 1.5 + 1);
     }
 
+#ifndef DEBUG
     if (help) {
       ImGui::SeparatorText("Help");
       ImGui::Text("a basic 2D lighting demo\n");
@@ -273,6 +245,7 @@ void Demo::renderUI() {
         ImGui::Text("(F1) to toggle hiding UI");
         break;
     }
+#endif
     ImGui::End();
   }
 
@@ -440,11 +413,11 @@ void Demo::reload() {
   if (IsKeyDown(KEY_LEFT_CONTROL)) {
     // reloading
       printf("Reloading shaders.\n");
-      UnloadShader(lightingShader);
-      lightingShader = LoadShader(0, "res/shaders/jfa.frag");
-      if (!IsShaderValid(lightingShader)) {
-        UnloadShader(lightingShader);
-        lightingShader = LoadShader(0, "res/shaders/broken.frag");
+      UnloadShader(jfaShader);
+      jfaShader = LoadShader(0, "res/shaders/jfa.frag");
+      if (!IsShaderValid(jfaShader)) {
+        UnloadShader(jfaShader);
+        jfaShader = LoadShader(0, "res/shaders/broken.frag");
       }
   } else if (user.mode == DRAWING) {
     printf("Replacing canvas.\n");

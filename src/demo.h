@@ -1,6 +1,7 @@
 #ifndef DEMO_H
 #define DEMO_H
 
+#include <map>
 #include <iostream>
 #include <vector>
 #include "config.h"
@@ -48,12 +49,14 @@ class Demo {
     void renderUI();
     void processKeyboardInput();
     void processMouseInput();
-    void clear();
 
   private:
+    // void loadShader(std::string shader);
+    // void reloadShaders();
     void addLight(Vector2 position, Vector3 normalisedColor, float radius, LightType type);
     void placeLights(int lightNumber = 4, float distFromCentre = 256.0);
     void reload();
+    void clear();
 
     // user
     struct {
@@ -84,7 +87,9 @@ class Demo {
 
     // resources
     int currentMap = 0;
-    Shader lightingShader;
+    std::map<std::string, Shader> shaders;
+    Shader jfaShader;
+    Shader rcShader;
     Shader prepShader;
     ImageTexture canvas;
     ImageTexture cursor;
