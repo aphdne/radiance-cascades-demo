@@ -9,5 +9,5 @@ uniform vec2 uResolution;
 
 void main() {
   fragColor = texture(uCanvas, fragTexCoord);
-  // fragColor = vec4(vec3(fragColor.b), 1.0);
+  fragColor = vec4(vec3(fragColor.b), 1.0);
 }

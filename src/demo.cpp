@@ -66,27 +66,9 @@ Demo::Demo() {
   canvas.img = LoadImage(filepath.c_str());
   canvas.tex = LoadTextureFromImage(canvas.img);
 
-  rcShader = LoadShader(0, "res/shaders/rc.frag");
-  if (!IsShaderValid(rcShader)) {
-    printf("rcShader is broken!!\n");
-    UnloadShader(jfaShader);
-    rcShader = LoadShader(0, "res/shaders/broken.frag");
-  }
-
-  // jfaShader = LoadShader(0, "res/shaders/old-lighting.frag");
-  jfaShader = LoadShader(0, "res/shaders/jfa.frag");
-  if (!IsShaderValid(jfaShader)) {
-    printf("jfaShader is broken!!\n");
-    UnloadShader(jfaShader);
-    jfaShader = LoadShader(0, "res/shaders/broken.frag");
-  }
-
-  prepShader = LoadShader(0, "res/shaders/prep.frag");
-  if (!IsShaderValid(prepShader)) {
-    printf("prepShader is broken!!\n");
-    UnloadShader(prepShader);
-    prepShader = LoadShader(0, "res/shaders/broken.frag");
-  }
+  loadShader("rc.frag");
+  loadShader("jfa.frag");
+  loadShader("prep.frag");
 
   // misc
 
@@ -105,6 +87,10 @@ void Demo::update() {
 void Demo::render() {
   ClearBackground(PINK);
 
+  rcShader = shaders["rc.frag"];
+  jfaShader = shaders["jfa.frag"];
+  prepShader = shaders["prep.frag"];
+
   RenderTexture2D bufferA = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
   RenderTexture2D bufferB = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
   RenderTexture2D bufferC = bufferA;
@@ -112,6 +98,8 @@ void Demo::render() {
   // for shader uniforms
   Vector2 resolution = { SCREEN_WIDTH, SCREEN_HEIGHT };
   resolution *= GetWindowScaleDPI();
+
+  SetTextureWrap(canvas.tex, TEXTURE_WRAP_CLAMP);
 
   // first render pass for JFA
   // create UV mask w/ prep shader
@@ -171,11 +159,12 @@ void Demo::render() {
 void Demo::renderUI() {
   if (skipUIRendering) return;
 
-  float h = 100;
-  if (user.mode == LIGHTING) h = 170;
-  if (user.mode == VIEWING)  h = 70;
-  if (debug) h += 78;
-  if (help)  h += 115;
+  // float h = 100;
+  // if (user.mode == LIGHTING) h = 170;
+  // if (user.mode == VIEWING)  h = 70;
+  // if (help)  h += 115;
+  // if (debug) h += 78;
+  float h = 78
 
   ImGui::SetNextWindowSize(ImVec2{300, h});
   ImGui::SetNextWindowPos(ImVec2{4, 4});
@@ -190,62 +179,60 @@ void Demo::renderUI() {
     if (debug) {
       ImGui::SeparatorText("Debug");
       ImGui::Text("%d FPS", GetFPS());
-      ImGui::SliderInt("##cascade amount", &cascadeAmount, 1, 128, "cascade amount = %i");
+      ImGui::SliderInt("##cascade amount", &cascadeAmount, 1, 1024, "cascade amount = %i");
       Vector4 c = ColorNormalize(user.lightColor);
       ImGui::Text("light seed = %f", (c.x + c.y + c.z) / 1.5 + 1);
     }
 
-#ifndef DEBUG
-    if (help) {
-      ImGui::SeparatorText("Help");
-      ImGui::Text("a basic 2D lighting demo\n");
-      ImGui::Spacing();
-      ImGui::Text("press 1, 2 or 3 to toggle between \ndrawing, lighting, and viewing mode");
-      ImGui::Spacing();
-      ImGui::Text("press (`) for sneaky debug controls/info");
-      ImGui::Text("press (h) to hide this text");
-    }
-
-    ImGui::SeparatorText(str.c_str());
-    switch (user.mode) {
-      case DRAWING: {
-          if (ImGui::SmallButton("(r)eload canvas")) reload();
-          ImGui::SameLine();
-          if (ImGui::SmallButton("(c)lear canvas")) clear();
-          ImGui::Combo("canvas", &currentMap, "maze.png\0trees.png\0", 2);
-          ImGui::SliderFloat("brush size", &user.brushSize, 0.1f, 1.0f, "brush size = %.2f");
-        }
-        break;
-      case LIGHTING: {
-          if (ImGui::SmallButton("(r)eload lights")) reload();
-          ImGui::SameLine();
-          if (ImGui::SmallButton("(c)lear lights")) clear();
-
-          ImGui::SliderFloat("light size", &user.lightSize, MIN_LIGHT_SIZE, MAX_LIGHT_SIZE, "light size = %.0fpx");
-
-          ImGui::Combo("light type", &user.lightType, "static\0sine\0saw\0noise\0", 3);
-
-          if (ImGui::SmallButton("set random colour"))  user.lightColor = RANDOM_COLOR;
-          Vector4 col4 = ColorNormalize(user.lightColor);
-          float col[3] = { col4.x, col4.y, col4.z };
-          ImGui::ColorEdit3("light color", col);
-          user.lightColor = ColorFromNormalized(Vector4{col[0], col[1], col[2], 1.0});
-
-          ImGui::Text("toggle random...");
-          if (ImGui::SmallButton("type")) randomLightType = !randomLightType;
-          ImGui::SameLine();
-          if (ImGui::SmallButton("colour")) randomLightColor = !randomLightColor;
-          ImGui::SameLine();
-          if (ImGui::SmallButton("size")) randomLightSize  = !randomLightSize;
-        }
-        break;
-      case VIEWING:
-        ImGui::Checkbox("\"perspective\" mode", &perspective);
-
-        ImGui::Text("(F1) to toggle hiding UI");
-        break;
-    }
-#endif
+    // if (help) {
+    //   ImGui::SeparatorText("Help");
+    //   ImGui::Text("a basic 2D lighting demo\n");
+    //   ImGui::Spacing();
+    //   ImGui::Text("press 1, 2 or 3 to toggle between \ndrawing, lighting, and viewing mode");
+    //   ImGui::Spacing();
+    //   ImGui::Text("press (`) for sneaky debug controls/info");
+    //   ImGui::Text("press (h) to hide this text");
+    // }
+    //
+    // ImGui::SeparatorText(str.c_str());
+    // switch (user.mode) {
+    //   case DRAWING: {
+    //       if (ImGui::SmallButton("(r)eload canvas")) reload();
+    //       ImGui::SameLine();
+    //       if (ImGui::SmallButton("(c)lear canvas")) clear();
+    //       ImGui::Combo("canvas", &currentMap, "maze.png\0trees.png\0", 2);
+    //       ImGui::SliderFloat("brush size", &user.brushSize, 0.1f, 1.0f, "brush size = %.2f");
+    //     }
+    //     break;
+    //   case LIGHTING: {
+    //       if (ImGui::SmallButton("(r)eload lights")) reload();
+    //       ImGui::SameLine();
+    //       if (ImGui::SmallButton("(c)lear lights")) clear();
+    //
+    //       ImGui::SliderFloat("light size", &user.lightSize, MIN_LIGHT_SIZE, MAX_LIGHT_SIZE, "light size = %.0fpx");
+    //
+    //       ImGui::Combo("light type", &user.lightType, "static\0sine\0saw\0noise\0", 3);
+    //
+    //       if (ImGui::SmallButton("set random colour"))  user.lightColor = RANDOM_COLOR;
+    //       Vector4 col4 = ColorNormalize(user.lightColor);
+    //       float col[3] = { col4.x, col4.y, col4.z };
+    //       ImGui::ColorEdit3("light color", col);
+    //       user.lightColor = ColorFromNormalized(Vector4{col[0], col[1], col[2], 1.0});
+    //
+    //       ImGui::Text("toggle random...");
+    //       if (ImGui::SmallButton("type")) randomLightType = !randomLightType;
+    //       ImGui::SameLine();
+    //       if (ImGui::SmallButton("colour")) randomLightColor = !randomLightColor;
+    //       ImGui::SameLine();
+    //       if (ImGui::SmallButton("size")) randomLightSize  = !randomLightSize;
+    //     }
+    //     break;
+    //   case VIEWING:
+    //     ImGui::Checkbox("\"perspective\" mode", &perspective);
+    //
+    //     ImGui::Text("(F1) to toggle hiding UI");
+    //     break;
+    // }
     ImGui::End();
   }
 
@@ -381,6 +368,26 @@ void Demo::processMouseInput() {
   }
 }
 
+void Demo::loadShader(std::string shader) {
+  std::string path = "res/shaders/" + shader;
+  Shader s = LoadShader(0, path.c_str());
+  if (!IsShaderValid(s)) {
+    std::cout << "ERR: '" << shader << "' is broken." << std::endl;
+    UnloadShader(s);
+    s = LoadShader(0, "res/shaders/broken.frag");
+  } else {
+    std::cout << "Loaded '" << shader << "' successfully." << std::endl;
+  }
+  shaders[shader] = s;
+}
+
+void Demo::reloadShaders() {
+  std::cout << "Reloading shaders." << std::endl;
+  for (auto const& [key, val] : shaders) {
+    loadShader(key);
+  }
+}
+
 void Demo::addLight(Vector2 position, Vector3 normalisedColor, float radius, LightType type) {
   Light l;
   l.position    = position;
@@ -411,14 +418,7 @@ void Demo::placeLights(int lightNumber, float distFromCentre) {
 // LIGHTING: set lighting to how it is when the programme starts
 void Demo::reload() {
   if (IsKeyDown(KEY_LEFT_CONTROL)) {
-    // reloading
-      printf("Reloading shaders.\n");
-      UnloadShader(jfaShader);
-      jfaShader = LoadShader(0, "res/shaders/jfa.frag");
-      if (!IsShaderValid(jfaShader)) {
-        UnloadShader(jfaShader);
-        jfaShader = LoadShader(0, "res/shaders/broken.frag");
-      }
+    reloadShaders();
   } else if (user.mode == DRAWING) {
     printf("Replacing canvas.\n");
     std::string filepath = "res/textures/canvas/" + maps[currentMap];

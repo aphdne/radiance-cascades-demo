@@ -51,8 +51,8 @@ class Demo {
     void processMouseInput();
 
   private:
-    // void loadShader(std::string shader);
-    // void reloadShaders();
+    void loadShader(std::string shader);
+    void reloadShaders();
     void addLight(Vector2 position, Vector3 normalisedColor, float radius, LightType type);
     void placeLights(int lightNumber = 4, float distFromCentre = 256.0);
     void reload();

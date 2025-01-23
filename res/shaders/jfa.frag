@@ -6,6 +6,8 @@ uniform sampler2D uCanvas;
 uniform int uJumpSize;
 uniform vec2 uResolution;
 
+/* this shader performs the jump-flood algorithm */
+
 void main() {
   /*
    * for a pixel at (x, y), we gather a maximum of nine seeds stored with pixels (x + i, y + j)
@@ -17,12 +19,13 @@ void main() {
   float closest = 9999.0;
   for (int Nx = -1; Nx <= 1; Nx++) {
     for (int Ny = -1; Ny <= 1; Ny++) {
-      vec2 NTexCoord = (vec2(Nx, Ny) * uJumpSize) / uResolution;
-      vec4 Nsample = texture(uCanvas, fragCoord + NTexCoord);
+      vec2 NTexCoord = fragCoord + (vec2(Nx, Ny) * uJumpSize) / uResolution;
+      vec4 Nsample = texture(uCanvas, NTexCoord);
 
-      if (Nx == 0 && Ny == 0 && Nsample.a >= 1.0) continue;
+      if (NTexCoord != clamp(NTexCoord, 0.0, 1.0)) continue; // skip pixels outside frame
+      if (Nsample.a == 0) continue;                          // skip pixels with no encoded texture coordinates
 
-      float d = distance(Nsample.rg, fragCoord);
+      float d = length(Nsample.rg - fragCoord);
       if (d < closest) {
         closest = d;
         fragColor = vec4(Nsample.rg, d, 1.0);
