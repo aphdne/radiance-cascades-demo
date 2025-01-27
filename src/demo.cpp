@@ -97,7 +97,10 @@ void Demo::render() {
 
   // for shader uniforms
   Vector2 resolution = { SCREEN_WIDTH, SCREEN_HEIGHT };
-  resolution *= GetWindowScaleDPI();
+  Vector2 dpi = GetWindowScaleDPI();
+  // resolution *= GetWindowScaleDPI();
+  // PRINT(GetWindowScaleDPI().x);
+  // PRINT(GetWindowScaleDPI().y);
 
   SetTextureWrap(canvas.tex, TEXTURE_WRAP_CLAMP);
 
@@ -107,6 +110,7 @@ void Demo::render() {
     BeginShaderMode(prepShader);
       SetShaderValueTexture(prepShader, GetShaderLocation(prepShader, "uCanvas"), canvas.tex);
       SetShaderValue(prepShader, GetShaderLocation(prepShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
+      SetShaderValue(prepShader, GetShaderLocation(prepShader, "uDPI"), &dpi, SHADER_UNIFORM_VEC2);
       DrawTexture(canvas.tex, 0, 0, WHITE);
     EndShaderMode();
   EndTextureMode();
@@ -126,8 +130,12 @@ void Demo::render() {
     EndTextureMode();
   }
 
-  // display bufferA to main framebuffer
+  // // display bufferA to main framebuffer
   BeginShaderMode(rcShader);
+    SetShaderValue(rcShader, GetShaderLocation(rcShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
+    SetShaderValue(rcShader, GetShaderLocation(rcShader, "uDPI"), &dpi, SHADER_UNIFORM_VEC2);
+    // SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uCanvas"), canvas.tex);
+    // DrawTexture(canvas.tex, 0, 0, WHITE);
     SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uCanvas"), bufferA.texture);
     DrawTexture(bufferA.texture, 0, 0, WHITE);
   EndShaderMode();
@@ -164,7 +172,7 @@ void Demo::renderUI() {
   // if (user.mode == VIEWING)  h = 70;
   // if (help)  h += 115;
   // if (debug) h += 78;
-  float h = 78
+  float h = 78;
 
   ImGui::SetNextWindowSize(ImVec2{300, h});
   ImGui::SetNextWindowPos(ImVec2{4, 4});
@@ -179,7 +187,7 @@ void Demo::renderUI() {
     if (debug) {
       ImGui::SeparatorText("Debug");
       ImGui::Text("%d FPS", GetFPS());
-      ImGui::SliderInt("##cascade amount", &cascadeAmount, 1, 1024, "cascade amount = %i");
+      ImGui::SliderInt("##cascade amount", &cascadeAmount, 0, 1024, "cascade amount = %i");
       Vector4 c = ColorNormalize(user.lightColor);
       ImGui::Text("light seed = %f", (c.x + c.y + c.z) / 1.5 + 1);
     }
