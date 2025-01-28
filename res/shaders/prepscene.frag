@@ -3,7 +3,7 @@
 out vec4 fragColor;
 
 uniform sampler2D uOcclusionMap;
-uniform sampler2D uEmitterMap;
+uniform sampler2D uEmissionMap;
 uniform vec2 uResolution;
 
 /*
@@ -13,15 +13,19 @@ uniform vec2 uResolution;
 
 void main() {
   vec2 fragCoord = gl_FragCoord.xy/uResolution; // for some reason fragTexCoord is just upside down sometimes? Raylib issue
-  vec4 mask = texture(uOcclusionMap, fragCoord);
-  if (mask == vec4(1.0)) {
-    // vec4 mask2 = texture(uOcclusionMap, fragCoord);
-    // if (mask2 == vec4(0.0)) {
-      mask = vec4(0.0);
-    // }
-  } else /* if (mask == vec4(0.0, 0.0, 0.0, 1.0)) */ {
-    mask = vec4(fragCoord, 0.0, 1.0);
-  }
 
-  fragColor = mask;
+  vec4 o = texture(uOcclusionMap, fragCoord);
+  vec4 e = texture(uEmissionMap, fragCoord);
+
+  if (o == vec4(1.0))
+    o = vec4(0.0);
+  else
+    o = vec4(0.0, 0.0, 0.0, 1.0);
+
+  if (e == vec4(vec3(0.0), 1.0))
+    e = vec4(0.0);
+  else
+    e = vec4(1.0);
+
+  fragColor = (max(e.a, o.a) == e.a) ? e : o;
 }

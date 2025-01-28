@@ -49,6 +49,8 @@ class Demo {
     } user;
 
     bool perspective;
+    int maxSteps;
+    int raysPerPx;
 
     // ui
     bool debug;
@@ -62,7 +64,7 @@ class Demo {
     int currentMap = 0;
     std::map<std::string, Shader> shaders;
     ImageTexture occlusionMap;
-    ImageTexture emitterMap;
+    ImageTexture emissionMap;
     ImageTexture cursor;
 
     // misc

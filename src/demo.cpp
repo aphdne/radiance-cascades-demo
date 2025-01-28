@@ -3,8 +3,8 @@
 #define MOUSE_VECTOR Vector2{ static_cast<float>(GetMouseX()), static_cast<float>(GetMouseY()) }
 #define RELOAD_CANVAS() UnloadTexture(occlusionMap.tex); \
                         occlusionMap.tex = LoadTextureFromImage(occlusionMap.img); \
-                        UnloadTexture(emitterMap.tex); \
-                        emitterMap.tex = LoadTextureFromImage(emitterMap.img);
+                        UnloadTexture(emissionMap.tex); \
+                        emissionMap.tex = LoadTextureFromImage(emissionMap.img);
 #define RANDOM_COLOR ColorFromNormalized(Vector4{\
                                               (std::sin(static_cast<float>(GetTime()))   + 1) / 2,\
                                               (std::cos(static_cast<float>(GetTime()))   + 1) / 2,\
@@ -17,6 +17,8 @@ Demo::Demo() {
   user.mode  = DRAWING;
   perspective = false;
   skipUIRendering = false;
+  maxSteps = 64;
+  raysPerPx = 512;
 
   user.lightColor = RANDOM_COLOR;
 
@@ -59,8 +61,8 @@ Demo::Demo() {
   std::string filepath = "res/textures/canvas/" + maps[currentMap];
   occlusionMap.img = LoadImage(filepath.c_str());
   occlusionMap.tex = LoadTextureFromImage(occlusionMap.img);
-  emitterMap.img = GenImageColor(SCREEN_WIDTH, SCREEN_HEIGHT, BLACK);
-  emitterMap.tex = LoadTextureFromImage(emitterMap.img);
+  emissionMap.img = GenImageColor(SCREEN_WIDTH, SCREEN_HEIGHT, BLACK);
+  emissionMap.tex = LoadTextureFromImage(emissionMap.img);
 
   // automatically load fragment shaders in the res/shaders directory
   FilePathList shaderFiles = LoadDirectoryFilesEx("res/shaders", ".frag", false);
@@ -89,24 +91,35 @@ void Demo::update() {
 void Demo::render() {
   ClearBackground(PINK);
 
-  Shader& lightingShader = shaders["gi.frag"];
-  Shader& jfaShader = shaders["jfa.frag"];
-  Shader& prepShader = shaders["prep.frag"];
+  Shader& lightingShader  = shaders["gi.frag"];
+  Shader& jfaShader       = shaders["jfa.frag"];
+  Shader& prepJfaShader   = shaders["prepjfa.frag"];
+  Shader& scenePrepShader = shaders["prepscene.frag"];
 
-  RenderTexture2D bufferA = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
-  RenderTexture2D bufferB = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
-  RenderTexture2D bufferC = bufferA;
+  RenderTexture2D sceneBuf = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
+  RenderTexture2D bufferA  = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
+  RenderTexture2D bufferB  = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
+  RenderTexture2D bufferC  = bufferA;
 
   // for shader uniforms
   Vector2 resolution = { SCREEN_WIDTH, SCREEN_HEIGHT };
 
+  // create scene texture - combining emission & occlusion maps into one texture
+  BeginTextureMode(sceneBuf);
+    BeginShaderMode(scenePrepShader);
+      SetShaderValueTexture(scenePrepShader, GetShaderLocation(scenePrepShader, "uOcclusionMap"), occlusionMap.tex);
+      SetShaderValueTexture(scenePrepShader, GetShaderLocation(scenePrepShader, "uEmissionMap"),  emissionMap.tex);
+      SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
+      DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
+    EndShaderMode();
+  EndTextureMode();
+
   // first render pass for JFA
   // create UV mask w/ prep shader
   BeginTextureMode(bufferA);
-    BeginShaderMode(prepShader);
-      SetShaderValueTexture(prepShader, GetShaderLocation(prepShader, "uOcclusionMap"), occlusionMap.tex);
-      SetShaderValueTexture(prepShader, GetShaderLocation(prepShader, "uEmitterMap"),   emitterMap.tex);
-      SetShaderValue(prepShader, GetShaderLocation(prepShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
+    BeginShaderMode(prepJfaShader);
+      SetShaderValueTexture(prepJfaShader, GetShaderLocation(prepJfaShader, "uSceneMap"), sceneBuf.texture);
+      SetShaderValue(prepJfaShader, GetShaderLocation(prepJfaShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
       DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
     EndShaderMode();
   EndTextureMode();
@@ -114,7 +127,7 @@ void Demo::render() {
   // ping-pong buffering
   // alternate between two buffers so that we can implement a recursive shader
   // see https://mini.gmshaders.com/p/gm-shaders-mini-recursive-shaders-1308459
-  for (int j = cascadeAmount; j >= 1; j /= 2) {
+  for (int j = 512; j >= 1; j /= 2) {
     bufferC = bufferA;
     bufferA = bufferB;
     bufferB = bufferC;
@@ -131,19 +144,17 @@ void Demo::render() {
 
   resolution *= GetWindowScaleDPI();
 
-  // // display bufferA to main framebuffer
+  // display bufferA to main framebuffer
   BeginShaderMode(lightingShader);
-    int maxSteps  = 128;
-    int raysPerPx = 32;
     SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
     SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uRaysPerPx"),  &raysPerPx,  SHADER_UNIFORM_INT);
     SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uMaxSteps"),   &maxSteps,   SHADER_UNIFORM_INT);
     SetShaderValueTexture(lightingShader, GetShaderLocation(lightingShader, "uDistanceField"), bufferA.texture);
-    SetShaderValueTexture(lightingShader, GetShaderLocation(lightingShader, "uOcclusionMap"),  occlusionMap.tex);
-    SetShaderValueTexture(lightingShader, GetShaderLocation(lightingShader, "uEmitterMap"),    emitterMap.tex);
+    SetShaderValueTexture(lightingShader, GetShaderLocation(lightingShader, "uSceneMap"),      sceneBuf.texture);
     DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
   EndShaderMode();
 
+  UnloadRenderTexture(sceneBuf);
   UnloadRenderTexture(bufferA);
   UnloadRenderTexture(bufferB);
   UnloadRenderTexture(bufferC);
@@ -161,12 +172,11 @@ void Demo::render() {
 void Demo::renderUI() {
   if (skipUIRendering) return;
 
-  // float h = 100;
+  float h = 100;
   // if (user.mode == LIGHTING) h = 170;
   // if (user.mode == VIEWING)  h = 70;
   // if (help)  h += 115;
-  // if (debug) h += 78;
-  float h = 78;
+  if (debug) h += 78;
 
   ImGui::SetNextWindowSize(ImVec2{300, h});
   ImGui::SetNextWindowPos(ImVec2{4, 4});
@@ -181,9 +191,9 @@ void Demo::renderUI() {
     if (debug) {
       ImGui::SeparatorText("Debug");
       ImGui::Text("%d FPS", GetFPS());
-      ImGui::SliderInt("##cascade amount", &cascadeAmount, 0, 1024, "cascade amount = %i");
+      ImGui::SliderInt("##rays per px",   &raysPerPx, 0, 512, "rays per px = %i");
+      ImGui::SliderInt("##max ray steps", &maxSteps, 0, 512, "max ray steps = %i");
       Vector4 c = ColorNormalize(user.lightColor);
-      ImGui::Text("light seed = %f", (c.x + c.y + c.z) / 1.5 + 1);
     }
 
     // if (help) {
@@ -290,8 +300,9 @@ void Demo::processMouseInput() {
   else if (user.brushSize > 1.0) user.brushSize = 1.0;
 
   ImageTexture canvas = occlusionMap;
-  if (user.mode == LIGHTING) canvas = emitterMap;
+  if (user.mode == LIGHTING) canvas = emissionMap;
 
+  BeginBlendMode(BLEND_ADD_COLORS);
   if (IsMouseButtonDown(0) && !IsKeyDown(KEY_LEFT_CONTROL)) {
     // draw
     ImageDraw(&canvas.img,
@@ -312,9 +323,10 @@ void Demo::processMouseInput() {
                          static_cast<float>(GetMouseY() - user.brush.img.height / 2 * user.brushSize),
                          static_cast<float>(user.brush.img.width  * user.brushSize),
                          static_cast<float>(user.brush.img.height * user.brushSize) },
-              WHITE);
+              (user.mode == LIGHTING) ? BLACK : WHITE); // emission map uses a black background, occlusion map uses a white background
     RELOAD_CANVAS();
   }
+  EndBlendMode();
 }
 
 void Demo::loadShader(std::string shader) {
@@ -349,7 +361,7 @@ void Demo::reload() {
     printf("Replacing canvas.\n");
     std::string filepath = "res/textures/canvas/" + maps[currentMap];
     occlusionMap.img = LoadImage(filepath.c_str());
-    emitterMap.img = GenImageColor(SCREEN_WIDTH, SCREEN_HEIGHT, BLACK);
+    emissionMap.img = GenImageColor(SCREEN_WIDTH, SCREEN_HEIGHT, BLACK);
     RELOAD_CANVAS();
   }
 }
@@ -362,6 +374,6 @@ void Demo::reload() {
 void Demo::clear() {
   printf("Clearing canvas.\n");
   occlusionMap.img = GenImageColor(SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
-  emitterMap.img = GenImageColor(SCREEN_WIDTH, SCREEN_HEIGHT, BLACK);
+  emissionMap.img = GenImageColor(SCREEN_WIDTH, SCREEN_HEIGHT, BLACK);
   RELOAD_CANVAS();
 }

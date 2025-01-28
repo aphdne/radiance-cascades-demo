@@ -44,4 +44,6 @@ void main() {
       }
     }
   }
+
+  // fragColor = vec4(vec3(fragColor.b), 1.0);
 }
