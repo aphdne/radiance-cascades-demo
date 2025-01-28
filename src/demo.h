@@ -10,21 +10,6 @@
 #include "imgui.h"
 #include "rlImGui.h"
 
-enum LightType {
-  STATIC = 0,
-  SINE,
-  SAW,
-  NOISE
-};
-
-struct Light {
-  Vector2   position;
-  Vector3   color;
-  float     radius; // in pixels
-  float     timeCreated;
-  LightType type;
-};
-
 struct WindowData {
   ImGuiWindowFlags flags = 0;
   bool open              = true;
@@ -38,7 +23,6 @@ struct ImageTexture {
 enum Mode {
   DRAWING,
   LIGHTING,
-  VIEWING
 };
 
 class Demo {
@@ -53,8 +37,6 @@ class Demo {
   private:
     void loadShader(std::string shader);
     void reloadShaders();
-    void addLight(Vector2 position, Vector3 normalisedColor, float radius, LightType type);
-    void placeLights(int lightNumber = 4, float distFromCentre = 256.0);
     void reload();
     void clear();
 
@@ -63,15 +45,8 @@ class Demo {
       Mode         mode;
       ImageTexture brush;
       float        brushSize;
-      float        lightSize;
       Color        lightColor;
-      int          lightType;
     } user;
-
-    bool randomLightColor;
-    bool randomLightSize;
-    bool randomLightType;
-    double timeSinceLastType;
 
     bool perspective;
 
@@ -81,17 +56,13 @@ class Demo {
     WindowData debugWindowData;
     bool skipUIRendering;
 
-    std::vector<Light> lights;
-
-    const std::string maps[2] = { "maze.png", "trees.png" };
+    const std::string maps[2] = { "maze.png", "trees.png" }; // needed in this datatype for imgui
 
     // resources
     int currentMap = 0;
     std::map<std::string, Shader> shaders;
-    Shader jfaShader;
-    Shader rcShader;
-    Shader prepShader;
-    ImageTexture canvas;
+    ImageTexture occlusionMap;
+    ImageTexture emitterMap;
     ImageTexture cursor;
 
     // misc

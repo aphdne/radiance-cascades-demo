@@ -1,8 +1,10 @@
 #include "demo.h"
 
 #define MOUSE_VECTOR Vector2{ static_cast<float>(GetMouseX()), static_cast<float>(GetMouseY()) }
-#define RELOAD_CANVAS() UnloadTexture(canvas.tex); \
-                        canvas.tex = LoadTextureFromImage(canvas.img);
+#define RELOAD_CANVAS() UnloadTexture(occlusionMap.tex); \
+                        occlusionMap.tex = LoadTextureFromImage(occlusionMap.img); \
+                        UnloadTexture(emitterMap.tex); \
+                        emitterMap.tex = LoadTextureFromImage(emitterMap.img);
 #define RANDOM_COLOR ColorFromNormalized(Vector4{\
                                               (std::sin(static_cast<float>(GetTime()))   + 1) / 2,\
                                               (std::cos(static_cast<float>(GetTime()))   + 1) / 2,\
@@ -11,25 +13,17 @@
 
 Demo::Demo() {
   // user parameters
+
   user.mode  = DRAWING;
   perspective = false;
   skipUIRendering = false;
 
-  user.lightSize = 128.0;
-  user.lightType = 0; // STATIC
   user.lightColor = RANDOM_COLOR;
-
-  randomLightColor = false;
-  randomLightSize  = false;
-  randomLightType  = false;
-  timeSinceLastType = GetTime(); // for randomLightType cycling
 
   // ui parameters
 
   debug = false;
   help  = true;
-
-  placeLights();
 
   debugWindowData.flags |= ImGuiWindowFlags_NoTitleBar;
   debugWindowData.flags |= ImGuiWindowFlags_NoScrollbar;
@@ -63,12 +57,20 @@ Demo::Demo() {
   user.brushSize = 0.25;
 
   std::string filepath = "res/textures/canvas/" + maps[currentMap];
-  canvas.img = LoadImage(filepath.c_str());
-  canvas.tex = LoadTextureFromImage(canvas.img);
+  occlusionMap.img = LoadImage(filepath.c_str());
+  occlusionMap.tex = LoadTextureFromImage(occlusionMap.img);
+  emitterMap.img = GenImageColor(SCREEN_WIDTH, SCREEN_HEIGHT, BLACK);
+  emitterMap.tex = LoadTextureFromImage(emitterMap.img);
 
-  loadShader("rc.frag");
-  loadShader("jfa.frag");
-  loadShader("prep.frag");
+  // automatically load fragment shaders in the res/shaders directory
+  FilePathList shaderFiles = LoadDirectoryFilesEx("res/shaders", ".frag", false);
+  for (int i = 0; i < shaderFiles.count; i++) {
+    std::string str = shaderFiles.paths[i];
+    str.erase(0, 12);
+    if (str == "broken.frag") continue;
+    loadShader(str);
+  }
+  UnloadDirectoryFiles(shaderFiles);
 
   // misc
 
@@ -87,9 +89,9 @@ void Demo::update() {
 void Demo::render() {
   ClearBackground(PINK);
 
-  rcShader = shaders["rc.frag"];
-  jfaShader = shaders["jfa.frag"];
-  prepShader = shaders["prep.frag"];
+  Shader& lightingShader = shaders["gi.frag"];
+  Shader& jfaShader = shaders["jfa.frag"];
+  Shader& prepShader = shaders["prep.frag"];
 
   RenderTexture2D bufferA = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
   RenderTexture2D bufferB = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -97,24 +99,21 @@ void Demo::render() {
 
   // for shader uniforms
   Vector2 resolution = { SCREEN_WIDTH, SCREEN_HEIGHT };
-  Vector2 dpi = GetWindowScaleDPI();
-  // resolution *= GetWindowScaleDPI();
-  // PRINT(GetWindowScaleDPI().x);
-  // PRINT(GetWindowScaleDPI().y);
-
-  SetTextureWrap(canvas.tex, TEXTURE_WRAP_CLAMP);
 
   // first render pass for JFA
   // create UV mask w/ prep shader
   BeginTextureMode(bufferA);
     BeginShaderMode(prepShader);
-      SetShaderValueTexture(prepShader, GetShaderLocation(prepShader, "uCanvas"), canvas.tex);
+      SetShaderValueTexture(prepShader, GetShaderLocation(prepShader, "uOcclusionMap"), occlusionMap.tex);
+      SetShaderValueTexture(prepShader, GetShaderLocation(prepShader, "uEmitterMap"),   emitterMap.tex);
       SetShaderValue(prepShader, GetShaderLocation(prepShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
-      SetShaderValue(prepShader, GetShaderLocation(prepShader, "uDPI"), &dpi, SHADER_UNIFORM_VEC2);
-      DrawTexture(canvas.tex, 0, 0, WHITE);
+      DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
     EndShaderMode();
   EndTextureMode();
 
+  // ping-pong buffering
+  // alternate between two buffers so that we can implement a recursive shader
+  // see https://mini.gmshaders.com/p/gm-shaders-mini-recursive-shaders-1308459
   for (int j = cascadeAmount; j >= 1; j /= 2) {
     bufferC = bufferA;
     bufferA = bufferB;
@@ -125,41 +124,36 @@ void Demo::render() {
         SetShaderValueTexture(jfaShader, GetShaderLocation(jfaShader, "uCanvas"), bufferB.texture);
         SetShaderValue(jfaShader, GetShaderLocation(jfaShader, "uJumpSize"), &j, SHADER_UNIFORM_INT);
         SetShaderValue(jfaShader, GetShaderLocation(jfaShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
-        DrawTexture(bufferB.texture, 0, 0, WHITE);
+        DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
       EndShaderMode();
     EndTextureMode();
   }
 
-  // // display bufferA to main framebuffer
-  BeginShaderMode(rcShader);
-    SetShaderValue(rcShader, GetShaderLocation(rcShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
-    SetShaderValue(rcShader, GetShaderLocation(rcShader, "uDPI"), &dpi, SHADER_UNIFORM_VEC2);
-    // SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uCanvas"), canvas.tex);
-    // DrawTexture(canvas.tex, 0, 0, WHITE);
-    SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uCanvas"), bufferA.texture);
-    DrawTexture(bufferA.texture, 0, 0, WHITE);
-  EndShaderMode();
+  resolution *= GetWindowScaleDPI();
 
-  // switch (user.mode) {
-  //   case DRAWING:
-      DrawTextureEx(user.brush.tex,
-                    Vector2{ (float)(GetMouseX() - user.brush.tex.width  / 2 * user.brushSize),
-                             (float)(GetMouseY() - user.brush.tex.height / 2 * user.brushSize) },
-                    0.0,
-                    user.brushSize,
-                    Color{ 0, 0, 0, 128} );
-      // break;
-  //   case LIGHTING:
-  //     for (int i = 0; i < lights.size(); i++) {
-  //       DrawCircleLinesV(lights[i].position, lights[i].radius / 64 * 2, GREEN);
-  //      }
-  //     DrawCircleLines(GetMouseX(), GetMouseY(), user.lightSize, user.lightColor);
-  //     break;
-  // }
+  // // display bufferA to main framebuffer
+  BeginShaderMode(lightingShader);
+    int maxSteps  = 128;
+    int raysPerPx = 32;
+    SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
+    SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uRaysPerPx"),  &raysPerPx,  SHADER_UNIFORM_INT);
+    SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uMaxSteps"),   &maxSteps,   SHADER_UNIFORM_INT);
+    SetShaderValueTexture(lightingShader, GetShaderLocation(lightingShader, "uDistanceField"), bufferA.texture);
+    SetShaderValueTexture(lightingShader, GetShaderLocation(lightingShader, "uOcclusionMap"),  occlusionMap.tex);
+    SetShaderValueTexture(lightingShader, GetShaderLocation(lightingShader, "uEmitterMap"),    emitterMap.tex);
+    DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
+  EndShaderMode();
 
   UnloadRenderTexture(bufferA);
   UnloadRenderTexture(bufferB);
   UnloadRenderTexture(bufferC);
+
+  DrawTextureEx(user.brush.tex,
+                Vector2{ (float)(GetMouseX() - user.brush.tex.width  / 2 * user.brushSize),
+                         (float)(GetMouseY() - user.brush.tex.height / 2 * user.brushSize) },
+                0.0,
+                user.brushSize,
+                Color{ 0, 0, 0, 128} );
 }
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -179,7 +173,7 @@ void Demo::renderUI() {
 
   std::string str = "Drawing";
   if (user.mode == LIGHTING)     str = "Lighting";
-  else if (user.mode == VIEWING) str = "Viewing";
+  // else if (user.mode == VIEWING) str = "Viewing";
 
   if (!ImGui::Begin("Mode", &debugWindowData.open, debugWindowData.flags)) {
     ImGui::End();
@@ -263,7 +257,7 @@ void Demo::renderUI() {
 void Demo::processKeyboardInput() {
   if (IsKeyPressed(KEY_ONE))   user.mode = DRAWING;
   if (IsKeyPressed(KEY_TWO))   user.mode = LIGHTING;
-  if (IsKeyPressed(KEY_THREE)) user.mode = VIEWING;
+  // if (IsKeyPressed(KEY_THREE)) user.mode = VIEWING;
 
   if (IsKeyPressed(KEY_GRAVE)) debug = !debug;
   if (IsKeyPressed(KEY_F1))    skipUIRendering = !skipUIRendering;
@@ -285,94 +279,41 @@ void Demo::processKeyboardInput() {
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
+// TODO: hardware-accelerate brush drawing
 void Demo::processMouseInput() {
   // we do not want to be affecting the scene when we're clicking on the UI
   if (ImGui::GetIO().WantCaptureMouse) return;
 
-  // if      (user.mode == DRAWING)  user.brushSize += GetMouseWheelMove() / 100;
-  // else if (user.mode == LIGHTING) user.lightSize += GetMouseWheelMove() * 3;
   user.brushSize += GetMouseWheelMove() / 100;
 
   if      (user.brushSize < 0.1) user.brushSize = 0.1;
   else if (user.brushSize > 1.0) user.brushSize = 1.0;
 
-  if      (user.lightSize < MIN_LIGHT_SIZE) user.lightSize = MIN_LIGHT_SIZE;
-  else if (user.lightSize > MAX_LIGHT_SIZE) user.lightSize = MAX_LIGHT_SIZE;
+  ImageTexture canvas = occlusionMap;
+  if (user.mode == LIGHTING) canvas = emitterMap;
 
-  if (IsMouseButtonDown(2) || (IsKeyDown(KEY_LEFT_SHIFT) && IsMouseButtonDown(0))) {
-    for (int i = 0; i < lights.size(); i++) {
-      if (Vector2Length(lights[i].position - MOUSE_VECTOR) < 32) {
-        lights[i].position = Vector2{ static_cast<float>(GetMouseX()), static_cast<float>(GetMouseY()) };
-      }
-    }
-    return;
-  }
-
-  switch (user.mode) {
-    case DRAWING:
-      if (IsMouseButtonDown(0) && !IsKeyDown(KEY_LEFT_CONTROL)) {
-        // draw
-        ImageDraw(&canvas.img,
-                  user.brush.img,
-                  Rectangle{ 0, 0, (float)canvas.img.width, (float)canvas.img.height },
-                  Rectangle{ static_cast<float>(GetMouseX() - user.brush.img.width  / 2 * user.brushSize),
-                             static_cast<float>(GetMouseY() - user.brush.img.height / 2 * user.brushSize),
-                             static_cast<float>(user.brush.img.width  * user.brushSize),
-                             static_cast<float>(user.brush.img.height * user.brushSize) },
-                  BLACK);
-        RELOAD_CANVAS();
-      } else if (IsMouseButtonDown(1) || (IsKeyDown(KEY_LEFT_CONTROL) && IsMouseButtonDown(0))) {
-        // erase
-        ImageDraw(&canvas.img,
-                  user.brush.img,
-                  Rectangle{ 0, 0, (float)canvas.img.width, (float)canvas.img.height },
-                  Rectangle{ static_cast<float>(GetMouseX() - user.brush.img.width  / 2 * user.brushSize),
-                             static_cast<float>(GetMouseY() - user.brush.img.height / 2 * user.brushSize),
-                             static_cast<float>(user.brush.img.width  * user.brushSize),
-                             static_cast<float>(user.brush.img.height * user.brushSize) },
-                  WHITE);
-        RELOAD_CANVAS();
-      }
-      break;
-    case LIGHTING:
-      if (IsMouseButtonDown(0) && !IsKeyDown(KEY_LEFT_CONTROL)) {
-        // draw
-        ImageDraw(&canvas.img,
-                  user.brush.img,
-                  Rectangle{ 0, 0, (float)canvas.img.width, (float)canvas.img.height },
-                  Rectangle{ static_cast<float>(GetMouseX() - user.brush.img.width  / 2 * user.brushSize),
-                             static_cast<float>(GetMouseY() - user.brush.img.height / 2 * user.brushSize),
-                             static_cast<float>(user.brush.img.width  * user.brushSize),
-                             static_cast<float>(user.brush.img.height * user.brushSize) },
-                  user.lightColor);
-        RELOAD_CANVAS();
-      } else if (IsMouseButtonDown(1) || (IsKeyDown(KEY_LEFT_CONTROL) && IsMouseButtonDown(0))) {
-        // erase
-        ImageDraw(&canvas.img,
-                  user.brush.img,
-                  Rectangle{ 0, 0, (float)canvas.img.width, (float)canvas.img.height },
-                  Rectangle{ static_cast<float>(GetMouseX() - user.brush.img.width  / 2 * user.brushSize),
-                             static_cast<float>(GetMouseY() - user.brush.img.height / 2 * user.brushSize),
-                             static_cast<float>(user.brush.img.width  * user.brushSize),
-                             static_cast<float>(user.brush.img.height * user.brushSize) },
-                  WHITE);
-        RELOAD_CANVAS();
-      }
-      break;
-      // if (IsMouseButtonPressed(0) && !IsKeyDown(KEY_LEFT_CONTROL)) {
-      //   // place light
-      //   Vector4 col = ColorNormalize(user.lightColor);
-      //   Vector3 color = Vector3{col.x, col.y, col.z};
-      //   addLight(MOUSE_VECTOR, color, user.lightSize, (LightType)user.lightType);
-      // } else if (IsMouseButtonDown(1) || (IsKeyDown(KEY_LEFT_CONTROL) && IsMouseButtonDown(0))) {
-      //   // delete lights
-      //   for (int i = 0; i < lights.size(); i++) {
-      //     if (Vector2Length(lights[i].position - MOUSE_VECTOR) < 16) {
-      //       lights.erase(lights.begin() + i);
-      //     }
-      //   }
-      // }
-    break;
+  if (IsMouseButtonDown(0) && !IsKeyDown(KEY_LEFT_CONTROL)) {
+    // draw
+    ImageDraw(&canvas.img,
+              user.brush.img,
+              Rectangle{ 0, 0, (float)canvas.img.width, (float)canvas.img.height },
+              Rectangle{ static_cast<float>(GetMouseX() - user.brush.img.width  / 2 * user.brushSize),
+                         static_cast<float>(GetMouseY() - user.brush.img.height / 2 * user.brushSize),
+                         static_cast<float>(user.brush.img.width  * user.brushSize),
+                         static_cast<float>(user.brush.img.height * user.brushSize) },
+              (user.mode == LIGHTING) ? user.lightColor : BLACK);
+    RELOAD_CANVAS();
+  } else if (IsMouseButtonDown(1) || (IsKeyDown(KEY_LEFT_CONTROL) && IsMouseButtonDown(0))) {
+    // erase
+    ImageDraw(&canvas.img,
+              user.brush.img,
+              Rectangle{ 0, 0, (float)canvas.img.width, (float)canvas.img.height },
+              Rectangle{ static_cast<float>(GetMouseX() - user.brush.img.width  / 2 * user.brushSize),
+                         static_cast<float>(GetMouseY() - user.brush.img.height / 2 * user.brushSize),
+                         static_cast<float>(user.brush.img.width  * user.brushSize),
+                         static_cast<float>(user.brush.img.height * user.brushSize) },
+              WHITE);
+    RELOAD_CANVAS();
   }
 }
 
@@ -396,29 +337,6 @@ void Demo::reloadShaders() {
   }
 }
 
-void Demo::addLight(Vector2 position, Vector3 normalisedColor, float radius, LightType type) {
-  Light l;
-  l.position    = position;
-  l.color       = normalisedColor;
-  l.radius      = radius;
-  l.timeCreated = GetTime();
-  l.type        = type;
-  lights.push_back(l);
-}
-
-// place lights along an arbitray circle
-void Demo::placeLights(int lightNumber, float distFromCentre) {
-  for (float i = 0; i < lightNumber; i++) {
-    float t = (i+1) * (PI*2/lightNumber) + 0.1;
-    addLight(
-      Vector2{ SCREEN_WIDTH/2 + std::sin(t) * distFromCentre, SCREEN_HEIGHT/2 + std::cos(t) * distFromCentre},
-      Vector3{ std::sin(t), std::cos(t), 1.0 },
-      300,
-      STATIC
-    );
-  }
-}
-
 // reload based on what mode we're in, unless we're press control
 // if we're pressing control we reload shaders
 //
@@ -427,15 +345,12 @@ void Demo::placeLights(int lightNumber, float distFromCentre) {
 void Demo::reload() {
   if (IsKeyDown(KEY_LEFT_CONTROL)) {
     reloadShaders();
-  } else if (user.mode == DRAWING) {
+  } else {
     printf("Replacing canvas.\n");
     std::string filepath = "res/textures/canvas/" + maps[currentMap];
-    canvas.img = LoadImage(filepath.c_str());
+    occlusionMap.img = LoadImage(filepath.c_str());
+    emitterMap.img = GenImageColor(SCREEN_WIDTH, SCREEN_HEIGHT, BLACK);
     RELOAD_CANVAS();
-  } else if (user.mode == LIGHTING) {
-    printf("Replacing lights.\n");
-    lights.clear();
-    placeLights();
   }
 }
 
@@ -445,15 +360,8 @@ void Demo::reload() {
 // LIGHTING: clear lights
 //
 void Demo::clear() {
-  switch (user.mode) {
-    case DRAWING:
-      printf("Clearing canvas.\n");
-      canvas.img = GenImageColor(SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
-      RELOAD_CANVAS();
-      break;
-    case LIGHTING:
-      printf("Clearing lights.\n");
-      lights.clear();
-      break;
-  }
+  printf("Clearing canvas.\n");
+  occlusionMap.img = GenImageColor(SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
+  emitterMap.img = GenImageColor(SCREEN_WIDTH, SCREEN_HEIGHT, BLACK);
+  RELOAD_CANVAS();
 }
