@@ -18,7 +18,7 @@ Demo::Demo() {
   perspective = false;
   skipUIRendering = false;
   maxSteps = 64;
-  raysPerPx = 512;
+  raysPerPx = 256;
 
   user.lightColor = RANDOM_COLOR;
 
@@ -96,10 +96,29 @@ void Demo::render() {
   Shader& prepJfaShader   = shaders["prepjfa.frag"];
   Shader& scenePrepShader = shaders["prepscene.frag"];
 
-  RenderTexture2D sceneBuf = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
-  RenderTexture2D bufferA  = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
-  RenderTexture2D bufferB  = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
-  RenderTexture2D bufferC  = bufferA;
+  RenderTexture2D sceneBuf     = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
+  RenderTexture2D bufferA      = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
+  RenderTexture2D bufferB      = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
+  RenderTexture2D bufferC      = bufferA;
+
+  // change bit depth for bufferA so we can encode texture coordinates without losing data
+  // default Raylib FBOs have a bit depth of 8 per channel, which would only cover for a window of maximum size 255x255.
+
+  auto changeBitDepth = [](RenderTexture2D &buffer, PixelFormat pixformat) {
+    rlEnableFramebuffer(buffer.id);
+      rlUnloadTexture(buffer.texture.id);
+      buffer.texture.id = rlLoadTexture(NULL, SCREEN_WIDTH, SCREEN_HEIGHT, pixformat, 1);
+      buffer.texture.width = SCREEN_WIDTH;
+      buffer.texture.height = SCREEN_HEIGHT;
+      buffer.texture.format = pixformat;
+      buffer.texture.mipmaps = 1;
+      rlFramebufferAttach(buffer.id, buffer.texture.id, RL_ATTACHMENT_COLOR_CHANNEL0, RL_ATTACHMENT_TEXTURE2D, 0);
+    rlDisableFramebuffer();
+  };
+
+  changeBitDepth(bufferA, PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
+  changeBitDepth(bufferB, PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
+  changeBitDepth(bufferC, PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
 
   // for shader uniforms
   Vector2 resolution = { SCREEN_WIDTH, SCREEN_HEIGHT };
@@ -127,7 +146,7 @@ void Demo::render() {
   // ping-pong buffering
   // alternate between two buffers so that we can implement a recursive shader
   // see https://mini.gmshaders.com/p/gm-shaders-mini-recursive-shaders-1308459
-  for (int j = 512; j >= 1; j /= 2) {
+  for (int j = maxSteps; j >= 1; j /= 2) {
     bufferC = bufferA;
     bufferA = bufferB;
     bufferB = bufferC;
@@ -154,10 +173,10 @@ void Demo::render() {
     DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
   EndShaderMode();
 
-  UnloadRenderTexture(sceneBuf);
-  UnloadRenderTexture(bufferA);
   UnloadRenderTexture(bufferB);
   UnloadRenderTexture(bufferC);
+  UnloadRenderTexture(bufferA);
+  UnloadRenderTexture(sceneBuf);
 
   DrawTextureEx(user.brush.tex,
                 Vector2{ (float)(GetMouseX() - user.brush.tex.width  / 2 * user.brushSize),

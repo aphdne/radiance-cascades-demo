@@ -9,6 +9,7 @@
 #include "raymath.h"
 #include "imgui.h"
 #include "rlImGui.h"
+#include "rlgl.h"
 
 struct WindowData {
   ImGuiWindowFlags flags = 0;

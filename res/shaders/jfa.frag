@@ -1,5 +1,7 @@
 #version 330 core
 
+#define CENTER 127.0/255.0
+
 in vec2 fragTexCoord;
 
 out vec4 fragColor;
@@ -44,6 +46,4 @@ void main() {
       }
     }
   }
-
-  // fragColor = vec4(vec3(fragColor.b), 1.0);
 }
