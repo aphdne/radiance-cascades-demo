@@ -49,7 +49,6 @@ class Demo {
       Color        lightColor;
     } user;
 
-    bool perspective;
     int maxSteps;
     int raysPerPx;
 

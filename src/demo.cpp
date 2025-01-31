@@ -15,7 +15,6 @@ Demo::Demo() {
   // user parameters
 
   user.mode  = DRAWING;
-  perspective = false;
   skipUIRendering = false;
   maxSteps = 64;
   raysPerPx = 256;
@@ -78,7 +77,6 @@ Demo::Demo() {
 
   HideCursor();
   cascadeAmount = 512;
-
 }
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -95,11 +93,13 @@ void Demo::render() {
   Shader& jfaShader       = shaders["jfa.frag"];
   Shader& prepJfaShader   = shaders["prepjfa.frag"];
   Shader& scenePrepShader = shaders["prepscene.frag"];
+  Shader& distFieldShader = shaders["distfield.frag"];
 
   RenderTexture2D sceneBuf     = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
   RenderTexture2D bufferA      = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
   RenderTexture2D bufferB      = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
   RenderTexture2D bufferC      = bufferA;
+  RenderTexture2D distFieldBuf = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
 
   // change bit depth for bufferA so we can encode texture coordinates without losing data
   // default Raylib FBOs have a bit depth of 8 per channel, which would only cover for a window of maximum size 255x255.
@@ -119,16 +119,22 @@ void Demo::render() {
   changeBitDepth(bufferA, PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
   changeBitDepth(bufferB, PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
   changeBitDepth(bufferC, PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
+  changeBitDepth(sceneBuf, PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
+  changeBitDepth(sceneBuf, PIXELFORMAT_UNCOMPRESSED_R5G5B5A1);
+  changeBitDepth(distFieldBuf, PIXELFORMAT_UNCOMPRESSED_R16);
 
   // for shader uniforms
   Vector2 resolution = { SCREEN_WIDTH, SCREEN_HEIGHT };
 
   // create scene texture - combining emission & occlusion maps into one texture
+  // this is also the step to add dynamic gpu-driven lighting
   BeginTextureMode(sceneBuf);
     BeginShaderMode(scenePrepShader);
+      float time = GetTime();
       SetShaderValueTexture(scenePrepShader, GetShaderLocation(scenePrepShader, "uOcclusionMap"), occlusionMap.tex);
       SetShaderValueTexture(scenePrepShader, GetShaderLocation(scenePrepShader, "uEmissionMap"),  emissionMap.tex);
       SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
+      SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uTime"),       &time,       SHADER_UNIFORM_FLOAT);
       DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
     EndShaderMode();
   EndTextureMode();
@@ -163,13 +169,23 @@ void Demo::render() {
 
   resolution *= GetWindowScaleDPI();
 
+  // write distance field to another buffer
+  // reduces strain as the cpu gets to send less data to the gpu for GI shader
+  BeginTextureMode(distFieldBuf);
+    BeginShaderMode(distFieldShader);
+      SetShaderValueTexture(distFieldShader, GetShaderLocation(distFieldShader, "uJFA"), bufferA.texture);
+      SetShaderValue(distFieldShader, GetShaderLocation(distFieldShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
+      DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
+    EndShaderMode();
+  EndTextureMode();
+
   // display bufferA to main framebuffer
   BeginShaderMode(lightingShader);
+    SetShaderValueTexture(lightingShader, GetShaderLocation(lightingShader, "uDistanceField"), distFieldBuf.texture);
+    SetShaderValueTexture(lightingShader, GetShaderLocation(lightingShader, "uSceneMap"),      sceneBuf.texture);
     SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
     SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uRaysPerPx"),  &raysPerPx,  SHADER_UNIFORM_INT);
     SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uMaxSteps"),   &maxSteps,   SHADER_UNIFORM_INT);
-    SetShaderValueTexture(lightingShader, GetShaderLocation(lightingShader, "uDistanceField"), bufferA.texture);
-    SetShaderValueTexture(lightingShader, GetShaderLocation(lightingShader, "uSceneMap"),      sceneBuf.texture);
     DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
   EndShaderMode();
 
@@ -177,6 +193,7 @@ void Demo::render() {
   UnloadRenderTexture(bufferC);
   UnloadRenderTexture(bufferA);
   UnloadRenderTexture(sceneBuf);
+  UnloadRenderTexture(distFieldBuf);
 
   DrawTextureEx(user.brush.tex,
                 Vector2{ (float)(GetMouseX() - user.brush.tex.width  / 2 * user.brushSize),
@@ -189,20 +206,31 @@ void Demo::render() {
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 void Demo::renderUI() {
+  // dont draw our custom cursor if we are mousing over the UI
+  ImGuiIO& io = ImGui::GetIO();
+  if (!io.WantCaptureMouse) {
+    ImGui::SetMouseCursor(ImGuiMouseCursor_None);
+
+    DrawTextureEx(cursor.tex,
+                  Vector2{ (float)(GetMouseX() - cursor.img.width / 2 * CURSOR_SIZE),
+                           (float)(GetMouseY() - cursor.img.height/ 2 * CURSOR_SIZE) },
+                  0.0,
+                  CURSOR_SIZE,
+                  WHITE);
+  }
+
   if (skipUIRendering) return;
 
   float h = 100;
   // if (user.mode == LIGHTING) h = 170;
-  // if (user.mode == VIEWING)  h = 70;
   // if (help)  h += 115;
-  if (debug) h += 78;
+  if (debug) h += 178;
 
   ImGui::SetNextWindowSize(ImVec2{300, h});
   ImGui::SetNextWindowPos(ImVec2{4, 4});
 
   std::string str = "Drawing";
   if (user.mode == LIGHTING)     str = "Lighting";
-  // else if (user.mode == VIEWING) str = "Viewing";
 
   if (!ImGui::Begin("Mode", &debugWindowData.open, debugWindowData.flags)) {
     ImGui::End();
@@ -212,72 +240,18 @@ void Demo::renderUI() {
       ImGui::Text("%d FPS", GetFPS());
       ImGui::SliderInt("##rays per px",   &raysPerPx, 0, 512, "rays per px = %i");
       ImGui::SliderInt("##max ray steps", &maxSteps, 0, 512, "max ray steps = %i");
-      Vector4 c = ColorNormalize(user.lightColor);
-    }
 
-    // if (help) {
-    //   ImGui::SeparatorText("Help");
-    //   ImGui::Text("a basic 2D lighting demo\n");
-    //   ImGui::Spacing();
-    //   ImGui::Text("press 1, 2 or 3 to toggle between \ndrawing, lighting, and viewing mode");
-    //   ImGui::Spacing();
-    //   ImGui::Text("press (`) for sneaky debug controls/info");
-    //   ImGui::Text("press (h) to hide this text");
-    // }
-    //
-    // ImGui::SeparatorText(str.c_str());
-    // switch (user.mode) {
-    //   case DRAWING: {
-    //       if (ImGui::SmallButton("(r)eload canvas")) reload();
-    //       ImGui::SameLine();
-    //       if (ImGui::SmallButton("(c)lear canvas")) clear();
-    //       ImGui::Combo("canvas", &currentMap, "maze.png\0trees.png\0", 2);
-    //       ImGui::SliderFloat("brush size", &user.brushSize, 0.1f, 1.0f, "brush size = %.2f");
-    //     }
-    //     break;
-    //   case LIGHTING: {
-    //       if (ImGui::SmallButton("(r)eload lights")) reload();
-    //       ImGui::SameLine();
-    //       if (ImGui::SmallButton("(c)lear lights")) clear();
-    //
-    //       ImGui::SliderFloat("light size", &user.lightSize, MIN_LIGHT_SIZE, MAX_LIGHT_SIZE, "light size = %.0fpx");
-    //
-    //       ImGui::Combo("light type", &user.lightType, "static\0sine\0saw\0noise\0", 3);
-    //
-    //       if (ImGui::SmallButton("set random colour"))  user.lightColor = RANDOM_COLOR;
-    //       Vector4 col4 = ColorNormalize(user.lightColor);
-    //       float col[3] = { col4.x, col4.y, col4.z };
-    //       ImGui::ColorEdit3("light color", col);
-    //       user.lightColor = ColorFromNormalized(Vector4{col[0], col[1], col[2], 1.0});
-    //
-    //       ImGui::Text("toggle random...");
-    //       if (ImGui::SmallButton("type")) randomLightType = !randomLightType;
-    //       ImGui::SameLine();
-    //       if (ImGui::SmallButton("colour")) randomLightColor = !randomLightColor;
-    //       ImGui::SameLine();
-    //       if (ImGui::SmallButton("size")) randomLightSize  = !randomLightSize;
-    //     }
-    //     break;
-    //   case VIEWING:
-    //     ImGui::Checkbox("\"perspective\" mode", &perspective);
-    //
-    //     ImGui::Text("(F1) to toggle hiding UI");
-    //     break;
-    // }
+      ImGui::Combo("canvas", &currentMap, "maze.png\0trees.png\0", 2);
+
+      if (ImGui::SmallButton("set random colour"))  user.lightColor = RANDOM_COLOR;
+      Vector4 col4 = ColorNormalize(user.lightColor);
+      rlImGuiImageSizeV(&emissionMap.tex, {200, 200});
+      float col[3] = { col4.x, col4.y, col4.z };
+      ImGui::ColorEdit3("light color", col);
+      user.lightColor = ColorFromNormalized(Vector4{col[0], col[1], col[2], 1.0});
+    }
     ImGui::End();
   }
-
-  // dont draw our custom cursor if we are mousing over the UI
-  ImGuiIO& io = ImGui::GetIO();
-  if (!io.WantCaptureMouse) {
-    DrawTextureEx(cursor.tex,
-                  Vector2{ (float)(GetMouseX() - cursor.img.width / 2 * CURSOR_SIZE),
-                           (float)(GetMouseY() - cursor.img.height/ 2 * CURSOR_SIZE) },
-                  0.0,
-                  CURSOR_SIZE,
-                  WHITE);
-  }
-
 }
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -286,7 +260,6 @@ void Demo::renderUI() {
 void Demo::processKeyboardInput() {
   if (IsKeyPressed(KEY_ONE))   user.mode = DRAWING;
   if (IsKeyPressed(KEY_TWO))   user.mode = LIGHTING;
-  // if (IsKeyPressed(KEY_THREE)) user.mode = VIEWING;
 
   if (IsKeyPressed(KEY_GRAVE)) debug = !debug;
   if (IsKeyPressed(KEY_F1))    skipUIRendering = !skipUIRendering;
@@ -302,26 +275,22 @@ void Demo::processKeyboardInput() {
   if (IsKeyPressed(KEY_C)) clear();
   if (IsKeyPressed(KEY_R)) reload();
   if (IsKeyPressed(KEY_H)) help = !help;
-
-  // if (IsKeyPressed(KEY_F)) ToggleFullscreen();
 }
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-// TODO: hardware-accelerate brush drawing
 void Demo::processMouseInput() {
   // we do not want to be affecting the scene when we're clicking on the UI
   if (ImGui::GetIO().WantCaptureMouse) return;
 
   user.brushSize += GetMouseWheelMove() / 100;
 
-  if      (user.brushSize < 0.1) user.brushSize = 0.1;
+  if      (user.brushSize < 0.05) user.brushSize = 0.05;
   else if (user.brushSize > 1.0) user.brushSize = 1.0;
 
   ImageTexture canvas = occlusionMap;
   if (user.mode == LIGHTING) canvas = emissionMap;
 
-  BeginBlendMode(BLEND_ADD_COLORS);
   if (IsMouseButtonDown(0) && !IsKeyDown(KEY_LEFT_CONTROL)) {
     // draw
     ImageDraw(&canvas.img,
@@ -345,7 +314,6 @@ void Demo::processMouseInput() {
               (user.mode == LIGHTING) ? BLACK : WHITE); // emission map uses a black background, occlusion map uses a white background
     RELOAD_CANVAS();
   }
-  EndBlendMode();
 }
 
 void Demo::loadShader(std::string shader) {

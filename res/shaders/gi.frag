@@ -11,7 +11,9 @@ uniform vec2      uResolution;
 uniform int       uRaysPerPx;
 uniform int       uMaxSteps;
 
+uniform sampler2D uJFA;
 uniform sampler2D uDistanceField;
+uniform sampler2D uEmissionMap;
 uniform sampler2D uSceneMap;
 
 /* this shader performs "radiosity-based GI" */
@@ -43,15 +45,16 @@ vec3 raymarch(vec2 uv, vec2 dir) {
    */
   float dist = 0.0;
   for (int i = 0; i < uMaxSteps; i++) {
-    uv += (dir * dist)/* / (uResolution.x/uResolution.y) */; // march our ray
-    dist = texture(uDistanceField, uv).b;                    // sample distance field
+    uv += (dir * dist) / (uResolution.x/uResolution.y); // march our ray (divided by our aspect ratio so no skewed directions)
+    dist = texture(uDistanceField, uv).r;               // sample distance field
 
-    // if (uv/uResolution != clamp(uv/uResolution, 0.0, 1.0)) return vec3(0.0);
-    // if (uv.x > 1.0 || uv.x < 0.0 || uv.y > 1.0 || uv.y < 0.0) return vec3(0.0);
+    // skip UVs outside of the window
+    // our Y coordinate is upside down
+    if (uv.x != clamp(uv.x,  0.0, 1.0)) return vec3(0.0);
+    if (uv.y != clamp(uv.y, -1.0, 0.0)) return vec3(0.0);
 
     if (dist < 0.001) { // surface hit
       return texture(uSceneMap, uv).rgb;
-      // return max(texture(uSceneMap, uv), texture(uSceneMap, uv - (dir * (1.0/uResolution)))).rgb;
     }
   }
   return vec3(0.0);
@@ -67,7 +70,7 @@ void main() {
   vec2 fragCoord = gl_FragCoord.xy/uResolution;
   fragCoord.y = -fragCoord.y;
 
-  float dist = texture(uDistanceField, fragCoord).b;
+  float dist = texture(uDistanceField, fragCoord).r;
   vec3 color = texture(uSceneMap, fragCoord).rgb;
 
   if (dist >= 0.001) {
@@ -84,7 +87,12 @@ void main() {
     color = (color / brightness) * (brightness / uRaysPerPx);
   }
 
-
   fragColor = vec4(color, 1.0);
-  // fragColor = texture(uDistanceField, fragCoord);
+  // fragColor = texture(uSceneMap, fragCoord);
+  // fragColor = vec4(vec3(texture(uDistanceField, fragCoord).r), 1.0);
+  // fragColor = vec4(vec3(map(texture(uDistanceField, fragCoord).r, 0.0, 1.0, 0.0, 255.0/65536.0) * 65536), 1.0);
+  // fragColor = vec4(clamp(vec3(texture(uDistanceField, fragCoord).r), 0.0, 255/65536.0) * 65536/255, 1.0);
+  // fragColor = texture(uJFA, fragCoord);
+  // fragColor = vec4(clamp(vec2(texture(uJFA, fragCoord).rg), vec2(0.0), vec2(255/65536.0)) * 65536/255, 0.0, 1.0);
+  // fragColor = vec4(vec3(map(texture(uJFA, fragCoord).g, 0.0, 1.0, 0.0, 1.0)), 1.0);
 }

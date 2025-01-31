@@ -28,7 +28,6 @@ void main() {
    * This essentially means that after running this shader the input texture will be processed so that each previously-empty pixel contains
    * the coordinates to its nearest seed.
    */
-
   vec2 fragCoord = gl_FragCoord.xy/uResolution; // for some reason fragTexCoord is just upside down sometimes? Raylib issue
   float closest = 9999.0;
   for (int Nx = -1; Nx <= 1; Nx++) {

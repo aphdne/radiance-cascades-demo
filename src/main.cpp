@@ -20,9 +20,9 @@ int main() {
   while (!WindowShouldClose())
   {
     demo.processKeyboardInput();
-    demo.processMouseInput();
     demo.update();
     BeginDrawing();
+      demo.processMouseInput(); // included in render loop for gpu-accelerated drawing
       demo.render();
       rlImGuiBegin();
         demo.renderUI();
