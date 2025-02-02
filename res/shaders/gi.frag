@@ -3,6 +3,8 @@
 #define PI 3.141596
 #define TWO_PI 6.2831853071795864769252867665590
 
+#define TAU 0.0005
+
 in vec2 fragTexCoord;
 
 out vec4 fragColor;
@@ -16,10 +18,7 @@ uniform sampler2D uDistanceField;
 uniform sampler2D uEmissionMap;
 uniform sampler2D uSceneMap;
 
-/* this shader performs "radiosity-based GI" */
-
-// FIX: banding
-// FIX: some prickles still?
+/* this shader performs "radiosity-based GI" - see comments */
 
 float map(float value, float min1, float max1, float min2, float max2) {
   return min2 + (value - min1) * (max2 - min2) / (max1 - min1);
@@ -33,7 +32,7 @@ vec3 raymarch(vec2 uv, vec2 dir) {
    * by that distance in the specified direction. We then take another reading of the distance field
    * and march our ray again according to that reading's value. We repeat this until we either exceed
    * our maximum step count or we read a value on the distance field below a certain value (ideally a small
-   * value such as 0.001), which indicates we have hit a surface.
+   * value such as 0.0001), which indicates we have hit a surface.
    *
    * Once we have hit a surface we can sample the surface that we have hit in the scene and return it.
    *
@@ -53,7 +52,7 @@ vec3 raymarch(vec2 uv, vec2 dir) {
     if (uv.x != clamp(uv.x,  0.0, 1.0)) return vec3(0.0);
     if (uv.y != clamp(uv.y, -1.0, 0.0)) return vec3(0.0);
 
-    if (dist < 0.001) { // surface hit
+    if (dist < TAU) { // surface hit
       return texture(uSceneMap, uv).rgb;
     }
   }
@@ -62,7 +61,7 @@ vec3 raymarch(vec2 uv, vec2 dir) {
 
 void main() {
  /*
-  * This GI algorithm works by utilising raymarching (see above).
+  * This GI algorithm works by utilising raymarching (see raymarching function).
   *
   * To calculate the light value of a pixel we cast rays in all directions (governed by uRaysPerPx in this case)
   * and then add up all the results of the rays.
@@ -73,7 +72,7 @@ void main() {
   float dist = texture(uDistanceField, fragCoord).r;
   vec3 color = texture(uSceneMap, fragCoord).rgb;
 
-  if (dist >= 0.001) {
+  if (dist >= TAU) {
     float brightness = max(color.r, max(color.g, color.b));
 
     // cast rays angularly with equal angles between them

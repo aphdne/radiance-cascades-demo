@@ -39,6 +39,9 @@ Demo::Demo() {
 
   // resource loading
 
+  // for shader uniforms
+  resolution = { SCREEN_WIDTH, SCREEN_HEIGHT };
+
   cursor.img = LoadImage("res/textures/cursor.png");
   cursor.tex = LoadTextureFromImage(cursor.img);
 
@@ -95,15 +98,16 @@ void Demo::render() {
   Shader& scenePrepShader = shaders["prepscene.frag"];
   Shader& distFieldShader = shaders["distfield.frag"];
 
+  // loading FBOs outside of the render loop seems to break this entire setup, not sure why
   RenderTexture2D sceneBuf     = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
   RenderTexture2D bufferA      = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
   RenderTexture2D bufferB      = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
   RenderTexture2D bufferC      = bufferA;
   RenderTexture2D distFieldBuf = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
 
-  // change bit depth for bufferA so we can encode texture coordinates without losing data
-  // default Raylib FBOs have a bit depth of 8 per channel, which would only cover for a window of maximum size 255x255.
-
+  // change bit depth for bufferA, B, & C so that we can encode texture coordinates without losing data
+  // default Raylib FBOs have a bit depth of 8 per channel, which would only cover for a window of maximum size 255x255
+  // we can also save some memory by reducing bit depth of buffers to what is strictly required
   auto changeBitDepth = [](RenderTexture2D &buffer, PixelFormat pixformat) {
     rlEnableFramebuffer(buffer.id);
       rlUnloadTexture(buffer.texture.id);
@@ -119,12 +123,8 @@ void Demo::render() {
   changeBitDepth(bufferA, PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
   changeBitDepth(bufferB, PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
   changeBitDepth(bufferC, PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
-  changeBitDepth(sceneBuf, PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
   changeBitDepth(sceneBuf, PIXELFORMAT_UNCOMPRESSED_R5G5B5A1);
   changeBitDepth(distFieldBuf, PIXELFORMAT_UNCOMPRESSED_R16);
-
-  // for shader uniforms
-  Vector2 resolution = { SCREEN_WIDTH, SCREEN_HEIGHT };
 
   // create scene texture - combining emission & occlusion maps into one texture
   // this is also the step to add dynamic gpu-driven lighting

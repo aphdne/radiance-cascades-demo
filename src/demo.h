@@ -67,6 +67,9 @@ class Demo {
     ImageTexture emissionMap;
     ImageTexture cursor;
 
+    // for shader uniforms
+    Vector2 resolution;
+
     // misc
     int cascadeAmount;
 };
