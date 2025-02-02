@@ -13,7 +13,6 @@ uniform vec2      uResolution;
 uniform int       uRaysPerPx;
 uniform int       uMaxSteps;
 
-uniform sampler2D uJFA;
 uniform sampler2D uDistanceField;
 uniform sampler2D uEmissionMap;
 uniform sampler2D uSceneMap;
@@ -87,11 +86,4 @@ void main() {
   }
 
   fragColor = vec4(color, 1.0);
-  // fragColor = texture(uSceneMap, fragCoord);
-  // fragColor = vec4(vec3(texture(uDistanceField, fragCoord).r), 1.0);
-  // fragColor = vec4(vec3(map(texture(uDistanceField, fragCoord).r, 0.0, 1.0, 0.0, 255.0/65536.0) * 65536), 1.0);
-  // fragColor = vec4(clamp(vec3(texture(uDistanceField, fragCoord).r), 0.0, 255/65536.0) * 65536/255, 1.0);
-  // fragColor = texture(uJFA, fragCoord);
-  // fragColor = vec4(clamp(vec2(texture(uJFA, fragCoord).rg), vec2(0.0), vec2(255/65536.0)) * 65536/255, 0.0, 1.0);
-  // fragColor = vec4(vec3(map(texture(uJFA, fragCoord).g, 0.0, 1.0, 0.0, 1.0)), 1.0);
 }

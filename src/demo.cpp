@@ -1,5 +1,6 @@
 #include "demo.h"
 
+#define CANVAS_MAP "res/textures/canvas/maze.png"
 #define MOUSE_VECTOR Vector2{ static_cast<float>(GetMouseX()), static_cast<float>(GetMouseY()) }
 #define RELOAD_CANVAS() UnloadTexture(occlusionMap.tex); \
                         occlusionMap.tex = LoadTextureFromImage(occlusionMap.img); \
@@ -12,17 +13,16 @@
                                               1.0 })
 
 Demo::Demo() {
-  // user parameters
-
-  user.mode  = DRAWING;
-  skipUIRendering = false;
+  // --- MISC PARAMETERS
   maxSteps = 64;
   raysPerPx = 256;
 
+  user.mode  = DRAWING;
   user.lightColor = RANDOM_COLOR;
 
-  // ui parameters
+  // UI
 
+  skipUIRendering = false;
   debug = false;
   help  = true;
 
@@ -37,49 +37,32 @@ Demo::Demo() {
   ImGuiIO& io = ImGui::GetIO();
   io.IniFilename = NULL;
 
-  // resource loading
+  HideCursor();
+
+  // --- LOAD RESOURCES
 
   // for shader uniforms
   resolution = { SCREEN_WIDTH, SCREEN_HEIGHT };
 
-  cursor.img = LoadImage("res/textures/cursor.png");
-  cursor.tex = LoadTextureFromImage(cursor.img);
+  cursorTex = LoadTexture("res/textures/cursor.png");
 
   user.brush.img = LoadImage("res/textures/brush.png");
-
-  for (int x = 0; x < user.brush.img.width; x++) {
-    for (int y = 0; y < user.brush.img.height; y++) {
-      if (GetImageColor(user.brush.img, x, y).a <= 0.25) {
-        ImageDrawPixel(&user.brush.img, x, y, Color{0, 0, 0, 0});
-      } else {
-        ImageDrawPixel(&user.brush.img, x, y, WHITE);
-      }
-    }
-  }
-
   user.brush.tex = LoadTextureFromImage(user.brush.img);
   user.brushSize = 0.25;
 
-  std::string filepath = "res/textures/canvas/" + maps[currentMap];
-  occlusionMap.img = LoadImage(filepath.c_str());
+  occlusionMap.img = LoadImage(CANVAS_MAP);
   occlusionMap.tex = LoadTextureFromImage(occlusionMap.img);
   emissionMap.img = GenImageColor(SCREEN_WIDTH, SCREEN_HEIGHT, BLACK);
   emissionMap.tex = LoadTextureFromImage(emissionMap.img);
 
-  // automatically load fragment shaders in the res/shaders directory
+  // automatically load fragment shaders in the `res/shaders` directory
   FilePathList shaderFiles = LoadDirectoryFilesEx("res/shaders", ".frag", false);
   for (int i = 0; i < shaderFiles.count; i++) {
     std::string str = shaderFiles.paths[i];
     str.erase(0, 12);
-    if (str == "broken.frag") continue;
-    loadShader(str);
+    if (str != "broken.frag") loadShader(str);
   }
   UnloadDirectoryFiles(shaderFiles);
-
-  // misc
-
-  HideCursor();
-  cascadeAmount = 512;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -211,26 +194,19 @@ void Demo::renderUI() {
   if (!io.WantCaptureMouse) {
     ImGui::SetMouseCursor(ImGuiMouseCursor_None);
 
-    DrawTextureEx(cursor.tex,
-                  Vector2{ (float)(GetMouseX() - cursor.img.width / 2 * CURSOR_SIZE),
-                           (float)(GetMouseY() - cursor.img.height/ 2 * CURSOR_SIZE) },
+    DrawTextureEx(cursorTex,
+                  Vector2{ (float)(GetMouseX() - cursorTex.width / 2 * CURSOR_SIZE),
+                           (float)(GetMouseY() - cursorTex.height/ 2 * CURSOR_SIZE) },
                   0.0,
                   CURSOR_SIZE,
                   WHITE);
   }
 
   if (skipUIRendering) return;
+  if (!debug) return;
 
-  float h = 100;
-  // if (user.mode == LIGHTING) h = 170;
-  // if (help)  h += 115;
-  if (debug) h += 178;
-
-  ImGui::SetNextWindowSize(ImVec2{300, h});
+  ImGui::SetNextWindowSize(ImVec2{220, 150});
   ImGui::SetNextWindowPos(ImVec2{4, 4});
-
-  std::string str = "Drawing";
-  if (user.mode == LIGHTING)     str = "Lighting";
 
   if (!ImGui::Begin("Mode", &debugWindowData.open, debugWindowData.flags)) {
     ImGui::End();
@@ -241,11 +217,8 @@ void Demo::renderUI() {
       ImGui::SliderInt("##rays per px",   &raysPerPx, 0, 512, "rays per px = %i");
       ImGui::SliderInt("##max ray steps", &maxSteps, 0, 512, "max ray steps = %i");
 
-      ImGui::Combo("canvas", &currentMap, "maze.png\0trees.png\0", 2);
-
       if (ImGui::SmallButton("set random colour"))  user.lightColor = RANDOM_COLOR;
       Vector4 col4 = ColorNormalize(user.lightColor);
-      rlImGuiImageSizeV(&emissionMap.tex, {200, 200});
       float col[3] = { col4.x, col4.y, col4.z };
       ImGui::ColorEdit3("light color", col);
       user.lightColor = ColorFromNormalized(Vector4{col[0], col[1], col[2], 1.0});
@@ -284,36 +257,32 @@ void Demo::processMouseInput() {
   if (ImGui::GetIO().WantCaptureMouse) return;
 
   user.brushSize += GetMouseWheelMove() / 100;
-
   if      (user.brushSize < 0.05) user.brushSize = 0.05;
   else if (user.brushSize > 1.0) user.brushSize = 1.0;
 
   ImageTexture canvas = occlusionMap;
   if (user.mode == LIGHTING) canvas = emissionMap;
 
-  if (IsMouseButtonDown(0) && !IsKeyDown(KEY_LEFT_CONTROL)) {
-    // draw
+
+  Rectangle srcRec = { static_cast<float>(GetMouseX() - user.brush.img.width  / 2 * user.brushSize),
+                       static_cast<float>(GetMouseY() - user.brush.img.height / 2 * user.brushSize),
+                       static_cast<float>(user.brush.img.width  * user.brushSize),
+                       static_cast<float>(user.brush.img.height * user.brushSize) };
+
+  if (IsMouseButtonDown(0) && !IsKeyDown(KEY_LEFT_CONTROL)) {                                  // DRAW
     ImageDraw(&canvas.img,
               user.brush.img,
               Rectangle{ 0, 0, (float)canvas.img.width, (float)canvas.img.height },
-              Rectangle{ static_cast<float>(GetMouseX() - user.brush.img.width  / 2 * user.brushSize),
-                         static_cast<float>(GetMouseY() - user.brush.img.height / 2 * user.brushSize),
-                         static_cast<float>(user.brush.img.width  * user.brushSize),
-                         static_cast<float>(user.brush.img.height * user.brushSize) },
+              srcRec,
               (user.mode == LIGHTING) ? user.lightColor : BLACK);
-    RELOAD_CANVAS();
-  } else if (IsMouseButtonDown(1) || (IsKeyDown(KEY_LEFT_CONTROL) && IsMouseButtonDown(0))) {
-    // erase
+  } else if (IsMouseButtonDown(1) || (IsKeyDown(KEY_LEFT_CONTROL) && IsMouseButtonDown(0))) { // ERASE
     ImageDraw(&canvas.img,
               user.brush.img,
               Rectangle{ 0, 0, (float)canvas.img.width, (float)canvas.img.height },
-              Rectangle{ static_cast<float>(GetMouseX() - user.brush.img.width  / 2 * user.brushSize),
-                         static_cast<float>(GetMouseY() - user.brush.img.height / 2 * user.brushSize),
-                         static_cast<float>(user.brush.img.width  * user.brushSize),
-                         static_cast<float>(user.brush.img.height * user.brushSize) },
+              srcRec,
               (user.mode == LIGHTING) ? BLACK : WHITE); // emission map uses a black background, occlusion map uses a white background
-    RELOAD_CANVAS();
   }
+  RELOAD_CANVAS();
 }
 
 void Demo::loadShader(std::string shader) {
@@ -329,13 +298,6 @@ void Demo::loadShader(std::string shader) {
   shaders[shader] = s;
 }
 
-void Demo::reloadShaders() {
-  std::cout << "Reloading shaders." << std::endl;
-  for (auto const& [key, val] : shaders) {
-    loadShader(key);
-  }
-}
-
 // reload based on what mode we're in, unless we're press control
 // if we're pressing control we reload shaders
 //
@@ -343,11 +305,13 @@ void Demo::reloadShaders() {
 // LIGHTING: set lighting to how it is when the programme starts
 void Demo::reload() {
   if (IsKeyDown(KEY_LEFT_CONTROL)) {
-    reloadShaders();
+    std::cout << "Reloading shaders." << std::endl;
+    for (auto const& [key, val] : shaders) {
+      loadShader(key);
+    }
   } else {
     printf("Replacing canvas.\n");
-    std::string filepath = "res/textures/canvas/" + maps[currentMap];
-    occlusionMap.img = LoadImage(filepath.c_str());
+    occlusionMap.img = LoadImage(CANVAS_MAP);
     emissionMap.img = GenImageColor(SCREEN_WIDTH, SCREEN_HEIGHT, BLACK);
     RELOAD_CANVAS();
   }

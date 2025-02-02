@@ -37,11 +37,9 @@ class Demo {
 
   private:
     void loadShader(std::string shader);
-    void reloadShaders();
     void reload();
     void clear();
 
-    // user
     struct {
       Mode         mode;
       ImageTexture brush;
@@ -51,27 +49,24 @@ class Demo {
 
     int maxSteps;
     int raysPerPx;
-
-    // ui
     bool debug;
-    bool help;
-    WindowData debugWindowData;
-    bool skipUIRendering;
 
-    const std::string maps[2] = { "maze.png", "trees.png" }; // needed in this datatype for imgui
-
-    // resources
-    int currentMap = 0;
-    std::map<std::string, Shader> shaders;
-    ImageTexture occlusionMap;
-    ImageTexture emissionMap;
-    ImageTexture cursor;
+    // UI
 
     // for shader uniforms
     Vector2 resolution;
 
-    // misc
-    int cascadeAmount;
+    bool skipUIRendering;
+    WindowData debugWindowData;
+    bool help;
+
+    // RESOURCES
+    std::map<std::string, Shader> shaders;
+
+    ImageTexture occlusionMap;
+    ImageTexture emissionMap;
+
+    Texture cursorTex;
 };
 
 #endif /* DEMO_H */
