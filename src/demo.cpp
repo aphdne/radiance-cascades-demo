@@ -41,6 +41,8 @@ Demo::Demo() {
 
   // --- LOAD RESOURCES
 
+  lastMousePos = {0, 0};
+
   // for shader uniforms
   resolution = { SCREEN_WIDTH, SCREEN_HEIGHT };
 
@@ -114,8 +116,8 @@ void Demo::render() {
   BeginTextureMode(sceneBuf);
     BeginShaderMode(scenePrepShader);
       float time = GetTime();
-      SetShaderValueTexture(scenePrepShader, GetShaderLocation(scenePrepShader, "uOcclusionMap"), occlusionMap.tex);
-      SetShaderValueTexture(scenePrepShader, GetShaderLocation(scenePrepShader, "uEmissionMap"),  emissionMap.tex);
+      SetShaderValueTexture(scenePrepShader, GetShaderLocation(scenePrepShader, "uOcclusionMap"),    occlusionMap.tex);
+      SetShaderValueTexture(scenePrepShader, GetShaderLocation(scenePrepShader, "uEmissionMap"),     emissionMap.tex);
       SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
       SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uTime"),       &time,       SHADER_UNIFORM_FLOAT);
       DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
@@ -205,7 +207,7 @@ void Demo::renderUI() {
   if (skipUIRendering) return;
   if (!debug) return;
 
-  ImGui::SetNextWindowSize(ImVec2{220, 150});
+  ImGui::SetNextWindowSize(ImVec2{220, 550});
   ImGui::SetNextWindowPos(ImVec2{4, 4});
 
   if (!ImGui::Begin("Mode", &debugWindowData.open, debugWindowData.flags)) {
@@ -222,6 +224,8 @@ void Demo::renderUI() {
       float col[3] = { col4.x, col4.y, col4.z };
       ImGui::ColorEdit3("light color", col);
       user.lightColor = ColorFromNormalized(Vector4{col[0], col[1], col[2], 1.0});
+
+      rlImGuiImageSizeV(&emissionMap.tex, {80, 60});
     }
     ImGui::End();
   }
@@ -258,30 +262,34 @@ void Demo::processMouseInput() {
 
   user.brushSize += GetMouseWheelMove() / 100;
   if      (user.brushSize < 0.05) user.brushSize = 0.05;
-  else if (user.brushSize > 1.0) user.brushSize = 1.0;
+  else if (user.brushSize > 1.0)  user.brushSize = 1.0;
 
-  ImageTexture canvas = occlusionMap;
-  if (user.mode == LIGHTING) canvas = emissionMap;
+  auto draw = [this](ImageTexture canvas, Color color, Vector2 pos = MOUSE_VECTOR) {
+    ImageDraw(&canvas.img,
+              this->user.brush.img,
+              Rectangle{ 0, 0, (float)canvas.img.width, (float)canvas.img.height },
+              Rectangle{ static_cast<float>(pos.x - this->user.brush.img.width  / 2 * this->user.brushSize),
+                         static_cast<float>(pos.y - this->user.brush.img.height / 2 * this->user.brushSize),
+                         static_cast<float>(this->user.brush.img.width  * this->user.brushSize),
+                         static_cast<float>(this->user.brush.img.height * this->user.brushSize) },
+              color);
+  };
 
-
-  Rectangle srcRec = { static_cast<float>(GetMouseX() - user.brush.img.width  / 2 * user.brushSize),
-                       static_cast<float>(GetMouseY() - user.brush.img.height / 2 * user.brushSize),
-                       static_cast<float>(user.brush.img.width  * user.brushSize),
-                       static_cast<float>(user.brush.img.height * user.brushSize) };
-
+  ImageTexture& canvas = (user.mode == LIGHTING) ? emissionMap : occlusionMap;
+  Color color;
   if (IsMouseButtonDown(0) && !IsKeyDown(KEY_LEFT_CONTROL)) {                                  // DRAW
-    ImageDraw(&canvas.img,
-              user.brush.img,
-              Rectangle{ 0, 0, (float)canvas.img.width, (float)canvas.img.height },
-              srcRec,
-              (user.mode == LIGHTING) ? user.lightColor : BLACK);
+    color = (user.mode == LIGHTING) ? user.lightColor : BLACK;
   } else if (IsMouseButtonDown(1) || (IsKeyDown(KEY_LEFT_CONTROL) && IsMouseButtonDown(0))) { // ERASE
-    ImageDraw(&canvas.img,
-              user.brush.img,
-              Rectangle{ 0, 0, (float)canvas.img.width, (float)canvas.img.height },
-              srcRec,
-              (user.mode == LIGHTING) ? BLACK : WHITE); // emission map uses a black background, occlusion map uses a white background
+    color = (user.mode == LIGHTING) ? BLACK : WHITE;
   }
+
+  // Lerp between current mouse position and previous recorded mouse position so that we can have nice smooth lines when drawing
+  for (int i = 0; i < 10; i++) {
+    Vector2 pos = GetSplinePointLinear(lastMousePos, MOUSE_VECTOR, i/10.0);
+    draw(canvas, color, pos);
+  }
+  draw(canvas, color);
+  lastMousePos = MOUSE_VECTOR;
   RELOAD_CANVAS();
 }
 

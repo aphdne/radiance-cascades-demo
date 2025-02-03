@@ -3,7 +3,7 @@
 #define PI 3.141596
 #define TWO_PI 6.2831853071795864769252867665590
 
-#define TAU 0.0005
+#define TAU 0.0006
 
 in vec2 fragTexCoord;
 
@@ -86,4 +86,5 @@ void main() {
   }
 
   fragColor = vec4(color, 1.0);
+  // fragColor = texture(uSceneMap, fragCoord);
 }

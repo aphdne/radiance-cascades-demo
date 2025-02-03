@@ -59,6 +59,7 @@ class Demo {
     bool skipUIRendering;
     WindowData debugWindowData;
     bool help;
+    Vector2 lastMousePos;
 
     // RESOURCES
     std::map<std::string, Shader> shaders;
