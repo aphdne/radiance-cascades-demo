@@ -3,7 +3,7 @@
 
 #include <map>
 #include <iostream>
-#include <vector>
+// #include <vector>
 #include "config.h"
 #include "raylib.h"
 #include "raymath.h"
@@ -52,9 +52,6 @@ class Demo {
     bool debug;
 
     // UI
-
-    // for shader uniforms
-    Vector2 resolution;
 
     bool skipUIRendering;
     WindowData debugWindowData;

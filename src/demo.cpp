@@ -43,9 +43,6 @@ Demo::Demo() {
 
   lastMousePos = {0, 0};
 
-  // for shader uniforms
-  resolution = { SCREEN_WIDTH, SCREEN_HEIGHT };
-
   cursorTex = LoadTexture("res/textures/cursor.png");
 
   user.brush.img = LoadImage("res/textures/brush.png");
@@ -77,11 +74,11 @@ void Demo::update() {
 void Demo::render() {
   ClearBackground(PINK);
 
-  Shader& lightingShader  = shaders["gi.frag"];
-  Shader& jfaShader       = shaders["jfa.frag"];
-  Shader& prepJfaShader   = shaders["prepjfa.frag"];
-  Shader& scenePrepShader = shaders["prepscene.frag"];
-  Shader& distFieldShader = shaders["distfield.frag"];
+  const Shader& lightingShader  = shaders["gi.frag"];
+  const Shader& jfaShader       = shaders["jfa.frag"];
+  const Shader& prepJfaShader   = shaders["prepjfa.frag"];
+  const Shader& scenePrepShader = shaders["prepscene.frag"];
+  const Shader& distFieldShader = shaders["distfield.frag"];
 
   // loading FBOs outside of the render loop seems to break this entire setup, not sure why
   RenderTexture2D sceneBuf     = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -110,6 +107,8 @@ void Demo::render() {
   changeBitDepth(bufferC, PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
   changeBitDepth(sceneBuf, PIXELFORMAT_UNCOMPRESSED_R5G5B5A1);
   changeBitDepth(distFieldBuf, PIXELFORMAT_UNCOMPRESSED_R16);
+
+  Vector2 resolution = { SCREEN_WIDTH, SCREEN_HEIGHT };
 
   // create scene texture - combining emission & occlusion maps into one texture
   // this is also the step to add dynamic gpu-driven lighting
@@ -152,8 +151,6 @@ void Demo::render() {
     EndTextureMode();
   }
 
-  resolution *= GetWindowScaleDPI();
-
   // write distance field to another buffer
   // reduces strain as the cpu gets to send less data to the gpu for GI shader
   BeginTextureMode(distFieldBuf);
@@ -163,6 +160,8 @@ void Demo::render() {
       DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
     EndShaderMode();
   EndTextureMode();
+
+  resolution *= GetWindowScaleDPI();
 
   // display bufferA to main framebuffer
   BeginShaderMode(lightingShader);
@@ -207,7 +206,7 @@ void Demo::renderUI() {
   if (skipUIRendering) return;
   if (!debug) return;
 
-  ImGui::SetNextWindowSize(ImVec2{220, 550});
+  ImGui::SetNextWindowSize(ImVec2{220, 200});
   ImGui::SetNextWindowPos(ImVec2{4, 4});
 
   if (!ImGui::Begin("Mode", &debugWindowData.open, debugWindowData.flags)) {
@@ -264,33 +263,39 @@ void Demo::processMouseInput() {
   if      (user.brushSize < 0.05) user.brushSize = 0.05;
   else if (user.brushSize > 1.0)  user.brushSize = 1.0;
 
-  auto draw = [this](ImageTexture canvas, Color color, Vector2 pos = MOUSE_VECTOR) {
-    ImageDraw(&canvas.img,
-              this->user.brush.img,
-              Rectangle{ 0, 0, (float)canvas.img.width, (float)canvas.img.height },
-              Rectangle{ static_cast<float>(pos.x - this->user.brush.img.width  / 2 * this->user.brushSize),
-                         static_cast<float>(pos.y - this->user.brush.img.height / 2 * this->user.brushSize),
-                         static_cast<float>(this->user.brush.img.width  * this->user.brushSize),
-                         static_cast<float>(this->user.brush.img.height * this->user.brushSize) },
-              color);
-  };
+  if (IsMouseButtonDown(0) || IsMouseButtonDown(1)) {
+    // TODO: CPU-based drawing is not very efficient
+    auto draw = [this](ImageTexture canvas, Color color, Vector2 pos = MOUSE_VECTOR) {
+      ImageDraw(&canvas.img,
+                this->user.brush.img,
+                Rectangle{ 0, 0, (float)canvas.img.width, (float)canvas.img.height },
+                Rectangle{ static_cast<float>(pos.x - this->user.brush.img.width  / 2 * this->user.brushSize),
+                           static_cast<float>(pos.y - this->user.brush.img.height / 2 * this->user.brushSize),
+                           static_cast<float>(this->user.brush.img.width  * this->user.brushSize),
+                           static_cast<float>(this->user.brush.img.height * this->user.brushSize) },
+                color);
+    };
 
-  ImageTexture& canvas = (user.mode == LIGHTING) ? emissionMap : occlusionMap;
-  Color color;
-  if (IsMouseButtonDown(0) && !IsKeyDown(KEY_LEFT_CONTROL)) {                                  // DRAW
-    color = (user.mode == LIGHTING) ? user.lightColor : BLACK;
-  } else if (IsMouseButtonDown(1) || (IsKeyDown(KEY_LEFT_CONTROL) && IsMouseButtonDown(0))) { // ERASE
-    color = (user.mode == LIGHTING) ? BLACK : WHITE;
+    ImageTexture& canvas = (user.mode == LIGHTING) ? emissionMap : occlusionMap;
+    Color color;
+    if (IsMouseButtonDown(0) && !IsKeyDown(KEY_LEFT_CONTROL)) {                                  // DRAW
+      color = (user.mode == LIGHTING) ? user.lightColor : BLACK;
+    } else if (IsMouseButtonDown(1) || (IsKeyDown(KEY_LEFT_CONTROL) && IsMouseButtonDown(0))) { // ERASE
+      color = (user.mode == LIGHTING) ? BLACK : WHITE;
+    }
+
+    // Lerp between current mouse position and previous recorded mouse position so that we can have nice smooth lines when drawing
+    // this appears to be a very expensive operation! hence why it is enclosed in this if statement
+    // -20 FPS when drawing! crazy
+    for (int i = 0; i < 8; i++) {
+      Vector2 pos = GetSplinePointLinear(lastMousePos, MOUSE_VECTOR, i/10.0);
+      draw(canvas, color, pos);
+    }
+    draw(canvas, color);
+    RELOAD_CANVAS();
   }
 
-  // Lerp between current mouse position and previous recorded mouse position so that we can have nice smooth lines when drawing
-  for (int i = 0; i < 10; i++) {
-    Vector2 pos = GetSplinePointLinear(lastMousePos, MOUSE_VECTOR, i/10.0);
-    draw(canvas, color, pos);
-  }
-  draw(canvas, color);
   lastMousePos = MOUSE_VECTOR;
-  RELOAD_CANVAS();
 }
 
 void Demo::loadShader(std::string shader) {

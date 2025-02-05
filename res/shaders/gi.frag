@@ -19,10 +19,6 @@ uniform sampler2D uSceneMap;
 
 /* this shader performs "radiosity-based GI" - see comments */
 
-float map(float value, float min1, float max1, float min2, float max2) {
-  return min2 + (value - min1) * (max2 - min2) / (max1 - min1);
-}
-
 vec3 raymarch(vec2 uv, vec2 dir) {
   /*
    * Raymarching works by taking a position and a direction and using a distance field.
@@ -58,6 +54,18 @@ vec3 raymarch(vec2 uv, vec2 dir) {
   return vec3(0.0);
 }
 
+// sourced from https://samuelbigos.github.io/posts/2dgi1-2d-global-illumination-in-godot.html#the-fun-stuff---fields-and-algorithms
+vec3 lin_to_srgb(vec3 color)
+{
+   vec3 x = color.rgb * 12.92;
+   vec3 y = 1.055 * pow(clamp(color.rgb, 0.0, 1.0), vec3(0.4166667)) - 0.055;
+   vec3 clr = color.rgb;
+   clr.r = (color.r < 0.0031308) ? x.r : y.r;
+   clr.g = (color.g < 0.0031308) ? x.g : y.g;
+   clr.b = (color.b < 0.0031308) ? x.b : y.b;
+   return clr.rgb;
+}
+
 void main() {
  /*
   * This GI algorithm works by utilising raymarching (see raymarching function).
@@ -85,6 +93,7 @@ void main() {
     color = (color / brightness) * (brightness / uRaysPerPx);
   }
 
-  fragColor = vec4(color, 1.0);
+  fragColor = vec4(lin_to_srgb(color), 1.0);
+  // fragColor = vec4(color, 1.0);
   // fragColor = texture(uSceneMap, fragCoord);
 }

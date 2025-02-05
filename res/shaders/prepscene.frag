@@ -48,7 +48,7 @@ void main() {
   if (v < 0.99)
     e = vec4(0.0);
 
-  fragColor = (max(e.a, o.a) == e.a) ? e : o;
+  fragColor = (e.a > o.a) ? e : o;
 
   vec2 p = (vec2(cos(uTime), sin(uTime)) * 0.5 + 1) / 2;
   if (sdfCircle(p, 0.03))
