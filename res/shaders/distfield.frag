@@ -11,6 +11,5 @@ uniform vec2 uResolution;
 
 void main() {
   vec2 fragCoord = gl_FragCoord.xy/uResolution; // for some reason fragTexCoord is just upside down sometimes? Raylib issue
-  vec4 mask = texture(uJFA, fragCoord);
-  fragColor = vec4(vec3(mask.b), 1.0);
+  fragColor = vec4(vec3(texture(uJFA, fragCoord).b), 1.0);
 }

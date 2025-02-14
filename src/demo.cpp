@@ -14,8 +14,9 @@
 
 Demo::Demo() {
   // --- MISC PARAMETERS
-  maxSteps = 64;
-  raysPerPx = 256;
+  maxSteps = 32;
+  jfaSteps = 64;
+  raysPerPx = 350;
 
   user.mode  = DRAWING;
   user.lightColor = RANDOM_COLOR;
@@ -62,6 +63,33 @@ Demo::Demo() {
     if (str != "broken.frag") loadShader(str);
   }
   UnloadDirectoryFiles(shaderFiles);
+
+  // change bit depth for bufferA, B, & C so that we can encode texture coordinates without losing data
+  // default Raylib FBOs have a bit depth of 8 per channel, which would only cover for a window of maximum size 255x255
+  // we can also save some memory by reducing bit depth of buffers to what is strictly required
+  auto changeBitDepth = [](RenderTexture2D &buffer, PixelFormat pixformat) {
+    rlEnableFramebuffer(buffer.id);
+      rlUnloadTexture(buffer.texture.id);
+      buffer.texture.id = rlLoadTexture(NULL, SCREEN_WIDTH, SCREEN_HEIGHT, pixformat, 1);
+      buffer.texture.width = SCREEN_WIDTH;
+      buffer.texture.height = SCREEN_HEIGHT;
+      buffer.texture.format = pixformat;
+      buffer.texture.mipmaps = 1;
+      rlFramebufferAttach(buffer.id, buffer.texture.id, RL_ATTACHMENT_COLOR_CHANNEL0, RL_ATTACHMENT_TEXTURE2D, 0);
+    rlDisableFramebuffer();
+  };
+
+  bufferA      = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
+  bufferB      = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
+  bufferC      = bufferA;
+  sceneBuf     = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
+  distFieldBuf = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
+
+  changeBitDepth(bufferA, PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
+  changeBitDepth(bufferB, PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
+  changeBitDepth(bufferC, PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
+  changeBitDepth(sceneBuf, PIXELFORMAT_UNCOMPRESSED_R5G5B5A1);
+  changeBitDepth(distFieldBuf, PIXELFORMAT_UNCOMPRESSED_R16);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -80,39 +108,12 @@ void Demo::render() {
   const Shader& scenePrepShader = shaders["prepscene.frag"];
   const Shader& distFieldShader = shaders["distfield.frag"];
 
-  // loading FBOs outside of the render loop seems to break this entire setup, not sure why
-  RenderTexture2D sceneBuf     = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
-  RenderTexture2D bufferA      = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
-  RenderTexture2D bufferB      = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
-  RenderTexture2D bufferC      = bufferA;
-  RenderTexture2D distFieldBuf = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
-
-  // change bit depth for bufferA, B, & C so that we can encode texture coordinates without losing data
-  // default Raylib FBOs have a bit depth of 8 per channel, which would only cover for a window of maximum size 255x255
-  // we can also save some memory by reducing bit depth of buffers to what is strictly required
-  auto changeBitDepth = [](RenderTexture2D &buffer, PixelFormat pixformat) {
-    rlEnableFramebuffer(buffer.id);
-      rlUnloadTexture(buffer.texture.id);
-      buffer.texture.id = rlLoadTexture(NULL, SCREEN_WIDTH, SCREEN_HEIGHT, pixformat, 1);
-      buffer.texture.width = SCREEN_WIDTH;
-      buffer.texture.height = SCREEN_HEIGHT;
-      buffer.texture.format = pixformat;
-      buffer.texture.mipmaps = 1;
-      rlFramebufferAttach(buffer.id, buffer.texture.id, RL_ATTACHMENT_COLOR_CHANNEL0, RL_ATTACHMENT_TEXTURE2D, 0);
-    rlDisableFramebuffer();
-  };
-
-  changeBitDepth(bufferA, PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
-  changeBitDepth(bufferB, PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
-  changeBitDepth(bufferC, PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
-  changeBitDepth(sceneBuf, PIXELFORMAT_UNCOMPRESSED_R5G5B5A1);
-  changeBitDepth(distFieldBuf, PIXELFORMAT_UNCOMPRESSED_R16);
-
   Vector2 resolution = { SCREEN_WIDTH, SCREEN_HEIGHT };
 
   // create scene texture - combining emission & occlusion maps into one texture
   // this is also the step to add dynamic gpu-driven lighting
   BeginTextureMode(sceneBuf);
+    ClearBackground(BLANK);
     BeginShaderMode(scenePrepShader);
       float time = GetTime();
       SetShaderValueTexture(scenePrepShader, GetShaderLocation(scenePrepShader, "uOcclusionMap"),    occlusionMap.tex);
@@ -126,6 +127,7 @@ void Demo::render() {
   // first render pass for JFA
   // create UV mask w/ prep shader
   BeginTextureMode(bufferA);
+    ClearBackground(BLANK);
     BeginShaderMode(prepJfaShader);
       SetShaderValueTexture(prepJfaShader, GetShaderLocation(prepJfaShader, "uSceneMap"), sceneBuf.texture);
       SetShaderValue(prepJfaShader, GetShaderLocation(prepJfaShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
@@ -136,12 +138,13 @@ void Demo::render() {
   // ping-pong buffering
   // alternate between two buffers so that we can implement a recursive shader
   // see https://mini.gmshaders.com/p/gm-shaders-mini-recursive-shaders-1308459
-  for (int j = maxSteps; j >= 1; j /= 2) {
+  for (int j = jfaSteps*2; j >= 1; j /= 2) {
     bufferC = bufferA;
     bufferA = bufferB;
     bufferB = bufferC;
 
     BeginTextureMode(bufferA);
+      ClearBackground(BLANK);
       BeginShaderMode(jfaShader);
         SetShaderValueTexture(jfaShader, GetShaderLocation(jfaShader, "uCanvas"), bufferB.texture);
         SetShaderValue(jfaShader, GetShaderLocation(jfaShader, "uJumpSize"), &j, SHADER_UNIFORM_INT);
@@ -154,6 +157,7 @@ void Demo::render() {
   // write distance field to another buffer
   // reduces strain as the cpu gets to send less data to the gpu for GI shader
   BeginTextureMode(distFieldBuf);
+    ClearBackground(BLANK);
     BeginShaderMode(distFieldShader);
       SetShaderValueTexture(distFieldShader, GetShaderLocation(distFieldShader, "uJFA"), bufferA.texture);
       SetShaderValue(distFieldShader, GetShaderLocation(distFieldShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
@@ -165,6 +169,7 @@ void Demo::render() {
 
   // display bufferA to main framebuffer
   BeginShaderMode(lightingShader);
+    ClearBackground(BLANK);
     SetShaderValueTexture(lightingShader, GetShaderLocation(lightingShader, "uDistanceField"), distFieldBuf.texture);
     SetShaderValueTexture(lightingShader, GetShaderLocation(lightingShader, "uSceneMap"),      sceneBuf.texture);
     SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
@@ -173,18 +178,14 @@ void Demo::render() {
     DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
   EndShaderMode();
 
-  UnloadRenderTexture(bufferB);
-  UnloadRenderTexture(bufferC);
-  UnloadRenderTexture(bufferA);
-  UnloadRenderTexture(sceneBuf);
-  UnloadRenderTexture(distFieldBuf);
-
-  DrawTextureEx(user.brush.tex,
-                Vector2{ (float)(GetMouseX() - user.brush.tex.width  / 2 * user.brushSize),
-                         (float)(GetMouseY() - user.brush.tex.height / 2 * user.brushSize) },
-                0.0,
-                user.brushSize,
-                Color{ 0, 0, 0, 128} );
+  if (!skipUIRendering) {
+    DrawTextureEx(user.brush.tex,
+                  Vector2{ (float)(GetMouseX() - user.brush.tex.width  / 2 * user.brushSize),
+                           (float)(GetMouseY() - user.brush.tex.height / 2 * user.brushSize) },
+                  0.0,
+                  user.brushSize,
+                  Color{ 0, 0, 0, 128} );
+  }
 }
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -192,7 +193,7 @@ void Demo::render() {
 void Demo::renderUI() {
   // dont draw our custom cursor if we are mousing over the UI
   ImGuiIO& io = ImGui::GetIO();
-  if (!io.WantCaptureMouse) {
+  if (!io.WantCaptureMouse && !skipUIRendering) {
     ImGui::SetMouseCursor(ImGuiMouseCursor_None);
 
     DrawTextureEx(cursorTex,
@@ -204,27 +205,33 @@ void Demo::renderUI() {
   }
 
   if (skipUIRendering) return;
-  if (!debug) return;
 
-  ImGui::SetNextWindowSize(ImVec2{220, 200});
+  float h = 50;
+  if (debug) h += 160 + 60*5;
+
+  ImGui::SetNextWindowSize(ImVec2{220, h});
   ImGui::SetNextWindowPos(ImVec2{4, 4});
 
   if (!ImGui::Begin("Mode", &debugWindowData.open, debugWindowData.flags)) {
     ImGui::End();
   } else {
+    if (ImGui::SmallButton("set random colour"))  user.lightColor = RANDOM_COLOR;
+    Vector4 col4 = ColorNormalize(user.lightColor);
+    float col[3] = { col4.x, col4.y, col4.z };
+    ImGui::ColorEdit3("light color", col);
+    user.lightColor = ColorFromNormalized(Vector4{col[0], col[1], col[2], 1.0});
     if (debug) {
       ImGui::SeparatorText("Debug");
       ImGui::Text("%d FPS", GetFPS());
       ImGui::SliderInt("##rays per px",   &raysPerPx, 0, 512, "rays per px = %i");
       ImGui::SliderInt("##max ray steps", &maxSteps, 0, 512, "max ray steps = %i");
-
-      if (ImGui::SmallButton("set random colour"))  user.lightColor = RANDOM_COLOR;
-      Vector4 col4 = ColorNormalize(user.lightColor);
-      float col[3] = { col4.x, col4.y, col4.z };
-      ImGui::ColorEdit3("light color", col);
-      user.lightColor = ColorFromNormalized(Vector4{col[0], col[1], col[2], 1.0});
+      ImGui::SliderInt("##jfa steps",     &jfaSteps, 0, 512, "jfa steps = %i");
 
       rlImGuiImageSizeV(&emissionMap.tex, {80, 60});
+      rlImGuiImageSizeV(&occlusionMap.tex, {80, 60});
+      rlImGuiImageSizeV(&sceneBuf.texture, {80, 60});
+      rlImGuiImageSizeV(&bufferA.texture, {80, 60});
+      rlImGuiImageSizeV(&distFieldBuf.texture, {80, 60});
     }
     ImGui::End();
   }
@@ -304,7 +311,7 @@ void Demo::loadShader(std::string shader) {
   if (!IsShaderValid(s)) {
     std::cout << "ERR: '" << shader << "' is broken." << std::endl;
     UnloadShader(s);
-    s = LoadShader(0, "res/shaders/broken.frag");
+    s = LoadShader("res/shaders/default.vert", "res/shaders/broken.frag");
   } else {
     std::cout << "Loaded '" << shader << "' successfully." << std::endl;
   }

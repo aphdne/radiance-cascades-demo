@@ -2,10 +2,7 @@
 
 #define PI 3.141596
 #define TWO_PI 6.2831853071795864769252867665590
-
 #define TAU 0.0006
-
-in vec2 fragTexCoord;
 
 out vec4 fragColor;
 
@@ -14,7 +11,6 @@ uniform int       uRaysPerPx;
 uniform int       uMaxSteps;
 
 uniform sampler2D uDistanceField;
-uniform sampler2D uEmissionMap;
 uniform sampler2D uSceneMap;
 
 /* this shader performs "radiosity-based GI" - see comments */
@@ -71,7 +67,7 @@ void main() {
   * This GI algorithm works by utilising raymarching (see raymarching function).
   *
   * To calculate the light value of a pixel we cast rays in all directions (governed by uRaysPerPx in this case)
-  * and then add up all the results of the rays.
+  * and then add up all the results of the rays and divide by raycount.
   */
   vec2 fragCoord = gl_FragCoord.xy/uResolution;
   fragCoord.y = -fragCoord.y;
@@ -84,8 +80,7 @@ void main() {
 
     // cast rays angularly with equal angles between them
     for (float i = 0.0; i < TWO_PI; i += TWO_PI / uRaysPerPx) {
-      vec2 dir = vec2(cos(i), -sin(i));
-      vec3 hitcol = raymarch(fragCoord, dir);
+      vec3 hitcol = raymarch(fragCoord, vec2(cos(i), -sin(i)));
       color += hitcol;
       brightness += max(hitcol.r, max(hitcol.g, hitcol.b));
     }
@@ -94,6 +89,4 @@ void main() {
   }
 
   fragColor = vec4(lin_to_srgb(color), 1.0);
-  // fragColor = vec4(color, 1.0);
-  // fragColor = texture(uSceneMap, fragCoord);
 }

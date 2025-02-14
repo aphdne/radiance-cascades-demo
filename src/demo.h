@@ -48,8 +48,10 @@ class Demo {
     } user;
 
     int maxSteps;
+    int jfaSteps;
     int raysPerPx;
     bool debug;
+    bool sceneHasChanged;
 
     // UI
 
@@ -65,6 +67,12 @@ class Demo {
     ImageTexture emissionMap;
 
     Texture cursorTex;
+
+    RenderTexture2D sceneBuf;
+    RenderTexture2D bufferA;
+    RenderTexture2D bufferB;
+    RenderTexture2D bufferC;
+    RenderTexture2D distFieldBuf;
 };
 
 #endif /* DEMO_H */

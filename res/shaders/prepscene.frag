@@ -1,10 +1,11 @@
 #version 330 core
 
+#define SPEED 2.0
+
 out vec4 fragColor;
 
 uniform sampler2D uOcclusionMap;
 uniform sampler2D uEmissionMap;
-uniform sampler2D uEmissionMapMask;
 
 uniform vec2 uResolution;
 uniform float uTime;
@@ -25,6 +26,13 @@ vec3 rgb2hsv(vec3 c) {
     return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
 }
 
+vec3 hsv2rgb(vec3 c)
+{
+    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
 bool sdfCircle(vec2 pos, float r) {
   if (distance(gl_FragCoord.xy/uResolution, pos) < r) {
     return true;
@@ -37,7 +45,6 @@ void main() {
 
   vec4 o  = texture(uOcclusionMap, fragCoord);
   vec4 e  = texture(uEmissionMap, fragCoord);
-  vec4 em = texture(uEmissionMapMask, fragCoord);
 
   if (o == vec4(1.0))
     o = vec4(0.0);
@@ -48,9 +55,11 @@ void main() {
   if (v < 0.99)
     e = vec4(0.0);
 
-  fragColor = (e.a > o.a) ? e : o;
+  fragColor = (max(e.a, o.a) == e.a) ? e : o;
 
-  vec2 p = (vec2(cos(uTime), sin(uTime)) * 0.5 + 1) / 2;
-  if (sdfCircle(p, 0.03))
-    fragColor = vec4(1.0);
+  for (int i = 0; i < 6; i++) {
+    vec2 p = (vec2(cos(uTime/SPEED+i), sin(uTime/SPEED+i)) * 0.7 + 1) / 2;
+    if (sdfCircle(p, 0.007))
+      fragColor = vec4(hsv2rgb(vec3(i/6.0, 1.0, 1.0)), 1.0);
+  }
 }

@@ -22,7 +22,7 @@ int main() {
     demo.processKeyboardInput();
     demo.update();
     BeginDrawing();
-      demo.processMouseInput(); // included in render loop for gpu-accelerated drawing
+      demo.processMouseInput();
       demo.render();
       rlImGuiBegin();
         demo.renderUI();
