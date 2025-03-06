@@ -34,10 +34,7 @@ vec3 hsv2rgb(vec3 c)
 }
 
 bool sdfCircle(vec2 pos, float r) {
-  if (distance(gl_FragCoord.xy/uResolution, pos) < r) {
-    return true;
-  }
-  return false;
+  return (distance(gl_FragCoord.xy/uResolution, pos) < r);
 }
 
 void main() {
@@ -51,9 +48,11 @@ void main() {
   else
     o = vec4(0.0, 0.0, 0.0, 1.0);
 
+  // if (e == vec4(1.0)) e = vec4(0.0);
   float v = rgb2hsv(e.xyz).z;
   if (v < 0.99)
     e = vec4(0.0);
+  // if (e == vec4(0.0, 0.0, 0.0, 1.0)) e = vec4(0.0);
 
   fragColor = (max(e.a, o.a) == e.a) ? e : o;
 

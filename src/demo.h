@@ -36,6 +36,7 @@ class Demo {
     void processMouseInput();
 
   private:
+    void userSetRandomColor();
     void loadShader(std::string shader);
     void reload();
     void clear();
@@ -56,6 +57,7 @@ class Demo {
     // UI
 
     bool skipUIRendering;
+    bool debugShowBuffers;
     WindowData debugWindowData;
     bool help;
     Vector2 lastMousePos;

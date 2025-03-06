@@ -6,11 +6,6 @@
                         occlusionMap.tex = LoadTextureFromImage(occlusionMap.img); \
                         UnloadTexture(emissionMap.tex); \
                         emissionMap.tex = LoadTextureFromImage(emissionMap.img);
-#define RANDOM_COLOR ColorFromNormalized(Vector4{\
-                                              (std::sin(static_cast<float>(GetTime()))   + 1) / 2,\
-                                              (std::cos(static_cast<float>(GetTime()))   + 1) / 2,\
-                                              (std::sin(static_cast<float>(GetTime())*2) + 1) / 2,\
-                                              1.0 })
 
 Demo::Demo() {
   // --- MISC PARAMETERS
@@ -19,11 +14,11 @@ Demo::Demo() {
   raysPerPx = 350;
 
   user.mode  = DRAWING;
-  user.lightColor = RANDOM_COLOR;
+  userSetRandomColor();
 
   // UI
-
   skipUIRendering = false;
+  debugShowBuffers = false;
   debug = false;
   help  = true;
 
@@ -85,10 +80,10 @@ Demo::Demo() {
   sceneBuf     = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
   distFieldBuf = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
 
-  changeBitDepth(bufferA, PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
-  changeBitDepth(bufferB, PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
-  changeBitDepth(bufferC, PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
-  changeBitDepth(sceneBuf, PIXELFORMAT_UNCOMPRESSED_R5G5B5A1);
+  changeBitDepth(bufferA,      PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
+  changeBitDepth(bufferB,      PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
+  changeBitDepth(bufferC,      PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
+  changeBitDepth(sceneBuf,     PIXELFORMAT_UNCOMPRESSED_R5G5B5A1);
   changeBitDepth(distFieldBuf, PIXELFORMAT_UNCOMPRESSED_R16);
 }
 
@@ -206,32 +201,56 @@ void Demo::renderUI() {
 
   if (skipUIRendering) return;
 
-  float h = 50;
-  if (debug) h += 160 + 60*5;
-
-  ImGui::SetNextWindowSize(ImVec2{220, h});
+  float h = 70;
+  if (debug) {
+    h += 180;
+    if (debugShowBuffers) h += 60*3;
+  }
+  ImGui::SetNextWindowSize(ImVec2{250, h});
   ImGui::SetNextWindowPos(ImVec2{4, 4});
 
   if (!ImGui::Begin("Mode", &debugWindowData.open, debugWindowData.flags)) {
     ImGui::End();
   } else {
-    if (ImGui::SmallButton("set random colour"))  user.lightColor = RANDOM_COLOR;
+    if (ImGui::SmallButton("set r(a)ndom colour")) userSetRandomColor();
     Vector4 col4 = ColorNormalize(user.lightColor);
     float col[3] = { col4.x, col4.y, col4.z };
     ImGui::ColorEdit3("light color", col);
     user.lightColor = ColorFromNormalized(Vector4{col[0], col[1], col[2], 1.0});
+    if (ImGui::SmallButton("(c)lear canvas")) clear();
+    ImGui::SameLine();
+    if (ImGui::SmallButton("(r)eload canvas")) reload();
     if (debug) {
       ImGui::SeparatorText("Debug");
       ImGui::Text("%d FPS", GetFPS());
       ImGui::SliderInt("##rays per px",   &raysPerPx, 0, 512, "rays per px = %i");
       ImGui::SliderInt("##max ray steps", &maxSteps, 0, 512, "max ray steps = %i");
       ImGui::SliderInt("##jfa steps",     &jfaSteps, 0, 512, "jfa steps = %i");
-
-      rlImGuiImageSizeV(&emissionMap.tex, {80, 60});
-      rlImGuiImageSizeV(&occlusionMap.tex, {80, 60});
-      rlImGuiImageSizeV(&sceneBuf.texture, {80, 60});
-      rlImGuiImageSizeV(&bufferA.texture, {80, 60});
-      rlImGuiImageSizeV(&distFieldBuf.texture, {80, 60});
+      if (ImGui::SmallButton("show buffers")) debugShowBuffers = !debugShowBuffers;
+      if (debugShowBuffers) {
+        if (ImGui::BeginTable("buffer_table", 2)) {
+          ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            rlImGuiImageSizeV(&emissionMap.tex,      {80, 60});
+            ImGui::TableSetColumnIndex(1);
+            rlImGuiImageSizeV(&occlusionMap.tex,     {80, 60});
+          ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            rlImGuiImageSizeV(&sceneBuf.texture,     {80, 60});
+          ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            rlImGuiImageSizeV(&bufferA.texture,      {80, 60});
+            ImGui::TableSetColumnIndex(1);
+            rlImGuiImageSizeV(&distFieldBuf.texture, {80, 60});
+          ImGui::EndTable();
+        }
+      }
+      ImGui::SeparatorText("Build Info");
+      std::string str = "built ";
+      str += __DATE__;
+      str += " at ";
+      str += __TIME__;
+      ImGui::Text(str.c_str());
     }
     ImGui::End();
   }
@@ -257,6 +276,7 @@ void Demo::processKeyboardInput() {
 
   if (IsKeyPressed(KEY_C)) clear();
   if (IsKeyPressed(KEY_R)) reload();
+  if (IsKeyPressed(KEY_A)) userSetRandomColor();
   if (IsKeyPressed(KEY_H)) help = !help;
 }
 
@@ -272,7 +292,8 @@ void Demo::processMouseInput() {
 
   if (IsMouseButtonDown(0) || IsMouseButtonDown(1)) {
     // TODO: CPU-based drawing is not very efficient
-    auto draw = [this](ImageTexture canvas, Color color, Vector2 pos = MOUSE_VECTOR) {
+    // const Shader& shader = shaders["draw.frag"];
+    auto draw = [this](ImageTexture canvas, Color color, Vector2 pos = GetMousePosition()) {
       ImageDraw(&canvas.img,
                 this->user.brush.img,
                 Rectangle{ 0, 0, (float)canvas.img.width, (float)canvas.img.height },
@@ -295,14 +316,40 @@ void Demo::processMouseInput() {
     // this appears to be a very expensive operation! hence why it is enclosed in this if statement
     // -20 FPS when drawing! crazy
     for (int i = 0; i < 8; i++) {
-      Vector2 pos = GetSplinePointLinear(lastMousePos, MOUSE_VECTOR, i/10.0);
+      Vector2 pos = GetSplinePointLinear(lastMousePos, GetMousePosition(), i/10.0);
       draw(canvas, color, pos);
     }
     draw(canvas, color);
     RELOAD_CANVAS();
   }
 
-  lastMousePos = MOUSE_VECTOR;
+  lastMousePos = GetMousePosition();
+}
+
+// -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+void Demo::userSetRandomColor() {
+  Color col = ColorFromNormalized(Vector4{(std::sin(static_cast<float>(GetTime()))   + 1) / 2,
+                                          (std::cos(static_cast<float>(GetTime()))   + 1) / 2,
+                                          (std::sin(static_cast<float>(GetTime())*2) + 1) / 2,
+                                  1.0 });
+
+  // at least one colour channel needs to be at maximum
+  if (col.r < 255 && col.g < 255 & col.b < 255) {
+    switch (GetRandomValue(0, 2)) {
+      case 0:
+        col.r = 255;
+        break;
+      case 1:
+        col.g = 255;
+        break;
+      case 2:
+        col.b = 255;
+        break;
+    }
+  }
+
+  user.lightColor = col;
 }
 
 void Demo::loadShader(std::string shader) {

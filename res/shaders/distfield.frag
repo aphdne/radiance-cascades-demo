@@ -7,6 +7,7 @@ uniform vec2 uResolution;
 
 /*
  * this shader reads out the distance field contained within the JFA output.
+ * Useful as to reducing amount of data sent to RC shader
  */
 
 void main() {

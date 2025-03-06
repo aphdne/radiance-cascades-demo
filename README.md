@@ -6,6 +6,12 @@
 
 2D lighting demo.
 
+![Gif showcasing the current state of the programme](showcase.gif)
+
+Current iteration implements jump-flooding and a basic 2D lighting algorithm.
+
+User can click to draw/erase on a canvas, and can press \` for a debug menu.
+
 Maze image texture initially generated via [mazegenerator.net](https://www.mazegenerator.net/).
 
 ## Requirements
