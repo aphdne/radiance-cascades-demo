@@ -1,5 +1,6 @@
 #version 330 core
 
+#define CENTRE vec2(uResolution.x, uResolution.y)/2
 #define SPEED 2.0
 
 out vec4 fragColor;
@@ -7,6 +8,7 @@ out vec4 fragColor;
 uniform sampler2D uOcclusionMap;
 uniform sampler2D uEmissionMap;
 
+uniform vec2 uMousePos;
 uniform vec2 uResolution;
 uniform float uTime;
 
@@ -34,7 +36,7 @@ vec3 hsv2rgb(vec3 c)
 }
 
 bool sdfCircle(vec2 pos, float r) {
-  return (distance(gl_FragCoord.xy/uResolution, pos) < r);
+  return (distance(gl_FragCoord.xy, pos) < r);
 }
 
 void main() {
@@ -56,9 +58,13 @@ void main() {
 
   fragColor = (max(e.a, o.a) == e.a) ? e : o;
 
+  // if (sdfCircle(uMousePos, 10)) {
+  //   fragColor = vec4(1.0);
+  // }
+
   for (int i = 0; i < 6; i++) {
-    vec2 p = (vec2(cos(uTime/SPEED+i), sin(uTime/SPEED+i)) * 0.7 + 1) / 2;
-    if (sdfCircle(p, 0.007))
+    vec2 p = (vec2(cos(uTime/SPEED+i), sin(uTime/SPEED+i)) * 300 + 1) / 2;
+    if (sdfCircle(p + CENTRE, 10))
       fragColor = vec4(hsv2rgb(vec3(i/6.0, 1.0, 1.0)), 1.0);
   }
 }

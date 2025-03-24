@@ -1,7 +1,6 @@
 #include "demo.h"
 
 #define CANVAS_MAP "res/textures/canvas/maze.png"
-#define MOUSE_VECTOR Vector2{ static_cast<float>(GetMouseX()), static_cast<float>(GetMouseY()) }
 #define RELOAD_CANVAS() UnloadTexture(occlusionMap.tex); \
                         occlusionMap.tex = LoadTextureFromImage(occlusionMap.img); \
                         UnloadTexture(emissionMap.tex); \
@@ -9,11 +8,13 @@
 
 Demo::Demo() {
   // --- MISC PARAMETERS
-  maxSteps = 32;
-  jfaSteps = 64;
+  maxSteps = 64;
+  jfaSteps = 128;
   raysPerPx = 350;
+  pointA = 0.0;
+  pointB = 1.0;
 
-  user.mode  = DRAWING;
+  user.mode= DRAWING;
   userSetRandomColor();
 
   // UI
@@ -40,6 +41,7 @@ Demo::Demo() {
   lastMousePos = {0, 0};
 
   cursorTex = LoadTexture("res/textures/cursor.png");
+  blueNoiseTexture = LoadTexture("res/textures/blue_noise_1024x.png");
 
   user.brush.img = LoadImage("res/textures/brush.png");
   user.brush.tex = LoadTextureFromImage(user.brush.img);
@@ -74,11 +76,15 @@ Demo::Demo() {
     rlDisableFramebuffer();
   };
 
-  bufferA      = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
-  bufferB      = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
-  bufferC      = bufferA;
-  sceneBuf     = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
-  distFieldBuf = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
+  bufferA         = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
+  bufferB         = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
+  bufferC         = bufferA;
+  radianceBufferA = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
+  radianceBufferB = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
+  radianceBufferC = radianceBufferA;
+  sceneBuf        = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
+  distFieldBuf    = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
+  lastFrameBuf    = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
 
   changeBitDepth(bufferA,      PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
   changeBitDepth(bufferB,      PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
@@ -97,11 +103,14 @@ void Demo::update() {
 void Demo::render() {
   ClearBackground(PINK);
 
-  const Shader& lightingShader  = shaders["gi.frag"];
+  // const Shader& rcShader  = shaders["rc.frag"];
+  const Shader& giShader        = shaders["gi.frag"];
   const Shader& jfaShader       = shaders["jfa.frag"];
   const Shader& prepJfaShader   = shaders["prepjfa.frag"];
   const Shader& scenePrepShader = shaders["prepscene.frag"];
   const Shader& distFieldShader = shaders["distfield.frag"];
+  const Shader& lastFrameShader = shaders["gilastframe.frag"];
+  const Shader& finalShader = shaders["final.frag"];
 
   Vector2 resolution = { SCREEN_WIDTH, SCREEN_HEIGHT };
 
@@ -111,8 +120,10 @@ void Demo::render() {
     ClearBackground(BLANK);
     BeginShaderMode(scenePrepShader);
       float time = GetTime();
+      Vector2 mousePos = GetMousePosition();
       SetShaderValueTexture(scenePrepShader, GetShaderLocation(scenePrepShader, "uOcclusionMap"),    occlusionMap.tex);
       SetShaderValueTexture(scenePrepShader, GetShaderLocation(scenePrepShader, "uEmissionMap"),     emissionMap.tex);
+      SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uMousePos"),   &mousePos, SHADER_UNIFORM_VEC2);
       SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
       SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uTime"),       &time,       SHADER_UNIFORM_FLOAT);
       DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
@@ -130,9 +141,9 @@ void Demo::render() {
     EndShaderMode();
   EndTextureMode();
 
-  // ping-pong buffering
-  // alternate between two buffers so that we can implement a recursive shader
-  // see https://mini.gmshaders.com/p/gm-shaders-mini-recursive-shaders-1308459
+  // // ping-pong buffering
+  // // alternate between two buffers so that we can implement a recursive shader
+  // // see https://mini.gmshaders.com/p/gm-shaders-mini-recursive-shaders-1308459
   for (int j = jfaSteps*2; j >= 1; j /= 2) {
     bufferC = bufferA;
     bufferA = bufferB;
@@ -162,14 +173,36 @@ void Demo::render() {
 
   resolution *= GetWindowScaleDPI();
 
-  // display bufferA to main framebuffer
-  BeginShaderMode(lightingShader);
-    ClearBackground(BLANK);
-    SetShaderValueTexture(lightingShader, GetShaderLocation(lightingShader, "uDistanceField"), distFieldBuf.texture);
-    SetShaderValueTexture(lightingShader, GetShaderLocation(lightingShader, "uSceneMap"),      sceneBuf.texture);
-    SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
-    SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uRaysPerPx"),  &raysPerPx,  SHADER_UNIFORM_INT);
-    SetShaderValue(lightingShader, GetShaderLocation(lightingShader, "uMaxSteps"),   &maxSteps,   SHADER_UNIFORM_INT);
+  BeginTextureMode(radianceBufferB);
+    BeginShaderMode(lastFrameShader);
+      SetShaderValueTexture(lastFrameShader, GetShaderLocation(lastFrameShader, "uSceneMap"), sceneBuf.texture);
+      SetShaderValueTexture(lastFrameShader, GetShaderLocation(lastFrameShader, "uLastFrame"), lastFrameBuf.texture);
+      SetShaderValue(lastFrameShader, GetShaderLocation(lastFrameShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
+      DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
+    EndShaderMode();
+  EndTextureMode();
+
+  BeginTextureMode(radianceBufferA);
+    BeginShaderMode(giShader);
+      ClearBackground(BLANK);
+      SetShaderValueTexture(giShader, GetShaderLocation(giShader, "uDistanceField"), distFieldBuf.texture);
+      SetShaderValueTexture(giShader, GetShaderLocation(giShader, "uSceneMap"),      sceneBuf.texture);
+      SetShaderValueTexture(giShader, GetShaderLocation(giShader, "uBlueNoise"),     blueNoiseTexture);
+      SetShaderValueTexture(giShader, GetShaderLocation(giShader, "uLastFrame"),     radianceBufferB.texture);
+      SetShaderValue(giShader, GetShaderLocation(giShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
+      SetShaderValue(giShader, GetShaderLocation(giShader, "uRaysPerPx"),  &raysPerPx,  SHADER_UNIFORM_INT);
+      SetShaderValue(giShader, GetShaderLocation(giShader, "uMaxSteps"),   &maxSteps,   SHADER_UNIFORM_INT);
+      DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
+    EndShaderMode();
+  EndTextureMode();
+
+  BeginTextureMode(lastFrameBuf);
+    DrawTextureRec(radianceBufferA.texture, {0, 0.0, SCREEN_WIDTH, SCREEN_HEIGHT}, {0.0, 0.0}, WHITE);
+  EndTextureMode();
+
+  BeginShaderMode(finalShader);
+    SetShaderValueTexture(finalShader, GetShaderLocation(finalShader, "uCanvas"), lastFrameBuf.texture);
+    SetShaderValue(finalShader, GetShaderLocation(finalShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
     DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
   EndShaderMode();
 
@@ -201,10 +234,10 @@ void Demo::renderUI() {
 
   if (skipUIRendering) return;
 
-  float h = 70;
+  float h = 100;
   if (debug) {
     h += 180;
-    if (debugShowBuffers) h += 60*3;
+    if (debugShowBuffers) h += 60*4;
   }
   ImGui::SetNextWindowSize(ImVec2{250, h});
   ImGui::SetNextWindowPos(ImVec2{4, 4});
@@ -226,6 +259,8 @@ void Demo::renderUI() {
       ImGui::SliderInt("##rays per px",   &raysPerPx, 0, 512, "rays per px = %i");
       ImGui::SliderInt("##max ray steps", &maxSteps, 0, 512, "max ray steps = %i");
       ImGui::SliderInt("##jfa steps",     &jfaSteps, 0, 512, "jfa steps = %i");
+      ImGui::SliderFloat("##point a",     &pointA, 0.0, 1.0, "a = %f");
+      ImGui::SliderFloat("##point b",     &pointB, 0.0, 1.0, "b = %f");
       if (ImGui::SmallButton("show buffers")) debugShowBuffers = !debugShowBuffers;
       if (debugShowBuffers) {
         if (ImGui::BeginTable("buffer_table", 2)) {
@@ -242,6 +277,11 @@ void Demo::renderUI() {
             rlImGuiImageSizeV(&bufferA.texture,      {80, 60});
             ImGui::TableSetColumnIndex(1);
             rlImGuiImageSizeV(&distFieldBuf.texture, {80, 60});
+          ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            rlImGuiImageSizeV(&radianceBufferA.texture,      {80, 60});
+            ImGui::TableSetColumnIndex(1);
+            rlImGuiImageSizeV(&lastFrameBuf.texture,      {80, 60});
           ImGui::EndTable();
         }
       }
@@ -265,7 +305,7 @@ void Demo::processKeyboardInput() {
 
   if (IsKeyPressed(KEY_GRAVE)) debug = !debug;
   if (IsKeyPressed(KEY_F1))    skipUIRendering = !skipUIRendering;
-  // if (IsKeyPressed(KEY_F12)) {
+  // if (IsKeyPressed(KEY_F2)) {
   //   printf("Taking screenshot.\n");
   //   if (!DirectoryExists("screenshots")) MakeDirectory("screenshots");
   //   std::string pwd = GetWorkingDirectory();
@@ -273,6 +313,7 @@ void Demo::processKeyboardInput() {
   //   TakeScreenshot("screenshot.png");
   //   ChangeDirectory(pwd.c_str());
   // }
+  // if (IsKeyPressed(KEY_F12)) ToggleFullscreen();
 
   if (IsKeyPressed(KEY_C)) clear();
   if (IsKeyPressed(KEY_R)) reload();
@@ -292,7 +333,6 @@ void Demo::processMouseInput() {
 
   if (IsMouseButtonDown(0) || IsMouseButtonDown(1)) {
     // TODO: CPU-based drawing is not very efficient
-    // const Shader& shader = shaders["draw.frag"];
     auto draw = [this](ImageTexture canvas, Color color, Vector2 pos = GetMousePosition()) {
       ImageDraw(&canvas.img,
                 this->user.brush.img,

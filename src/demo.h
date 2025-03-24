@@ -53,6 +53,8 @@ class Demo {
     int raysPerPx;
     bool debug;
     bool sceneHasChanged;
+    float pointA;
+    float pointB;
 
     // UI
 
@@ -63,18 +65,24 @@ class Demo {
     Vector2 lastMousePos;
 
     // RESOURCES
+    bool giPing = false;
     std::map<std::string, Shader> shaders;
 
     ImageTexture occlusionMap;
     ImageTexture emissionMap;
 
     Texture cursorTex;
+    Texture blueNoiseTexture;
 
     RenderTexture2D sceneBuf;
     RenderTexture2D bufferA;
     RenderTexture2D bufferB;
     RenderTexture2D bufferC;
     RenderTexture2D distFieldBuf;
+    RenderTexture2D radianceBufferA;
+    RenderTexture2D radianceBufferB;
+    RenderTexture2D radianceBufferC;
+    RenderTexture2D lastFrameBuf;
 };
 
 #endif /* DEMO_H */

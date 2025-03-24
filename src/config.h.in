@@ -12,7 +12,6 @@
 
 // ---
 
-// for debugging purposes
 #define PRINT(x) std::cout << #x << ": " << x << std::endl
 
 // --- config variables
