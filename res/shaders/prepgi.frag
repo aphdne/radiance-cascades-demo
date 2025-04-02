@@ -1,6 +1,6 @@
 #version 330 core
 
-#define MIX_FACTOR 0.84
+#define MIX_FACTOR 0.7
 
 out vec4 fragColor;
 

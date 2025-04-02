@@ -1,7 +1,8 @@
 #version 330 core
 
 #define CENTRE vec2(uResolution.x, uResolution.y)/2
-#define SPEED 2.0
+#define ORB_SPEED 2.0
+#define ORB_SIZE uResolution.x/80
 
 out vec4 fragColor;
 
@@ -11,6 +12,7 @@ uniform sampler2D uEmissionMap;
 uniform vec2 uMousePos;
 uniform vec2 uResolution;
 uniform float uTime;
+uniform int uOrbs;
 
 /*
  * this shader prepares the canvas texture to be processed by the jump-flood algorithm in jfa.frag
@@ -40,7 +42,7 @@ bool sdfCircle(vec2 pos, float r) {
 }
 
 void main() {
-  vec2 fragCoord = gl_FragCoord.xy/uResolution; // for some reason fragTexCoord is just upside down sometimes? Raylib issue
+  vec2 fragCoord = gl_FragCoord.xy/uResolution;
 
   vec4 o  = texture(uOcclusionMap, fragCoord);
   vec4 e  = texture(uEmissionMap, fragCoord);
@@ -50,21 +52,27 @@ void main() {
   else
     o = vec4(0.0, 0.0, 0.0, 1.0);
 
-  // if (e == vec4(1.0)) e = vec4(0.0);
   float v = rgb2hsv(e.xyz).z;
   if (v < 0.99)
     e = vec4(0.0);
-  // if (e == vec4(0.0, 0.0, 0.0, 1.0)) e = vec4(0.0);
 
   fragColor = (max(e.a, o.a) == e.a) ? e : o;
 
-  // if (sdfCircle(uMousePos, 10)) {
-  //   fragColor = vec4(1.0);
-  // }
 
-  for (int i = 0; i < 6; i++) {
-    vec2 p = (vec2(cos(uTime/SPEED+i), sin(uTime/SPEED+i)) * 300 + 1) / 2;
-    if (sdfCircle(p + CENTRE, 10))
-      fragColor = vec4(hsv2rgb(vec3(i/6.0, 1.0, 1.0)), 1.0);
+  vec2 p;
+  if (uOrbs == 1) {
+   for (int i = 0; i < 6; i++) {
+      p = (vec2(cos(uTime/ORB_SPEED+i), sin(uTime/ORB_SPEED+i)) * uResolution.y/2 + 1) / 2 + CENTRE;
+      if (sdfCircle(p, uResolution.x/80))
+        fragColor = vec4(hsv2rgb(vec3(i/6.0, 1.0, 1.0)), 1.0);
+    }
+
+    p = vec2(cos(uTime/ORB_SPEED*4) * uResolution.x/4, 0) + CENTRE;
+    if (sdfCircle(p, ORB_SIZE))
+      fragColor = vec4(vec3(sin(uTime) + 1 / 2), 1.0);
+
+    p = vec2(0, sin(uTime/ORB_SPEED*4) * uResolution.x/4) + CENTRE;
+    if (sdfCircle(p, ORB_SIZE))
+      fragColor = vec4(vec3(cos(uTime) + 1 / 2), 1.0);
   }
 }

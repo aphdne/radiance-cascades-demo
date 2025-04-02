@@ -10,9 +10,10 @@ Demo::Demo() {
   // --- MISC PARAMETERS
   maxSteps = 64;
   jfaSteps = 128;
-  raysPerPx = 350;
+  raysPerPx = 64;
   pointA = 0.0;
   pointB = 1.0;
+  orbs = 0.0;
 
   user.mode= DRAWING;
   userSetRandomColor();
@@ -41,7 +42,6 @@ Demo::Demo() {
   lastMousePos = {0, 0};
 
   cursorTex = LoadTexture("res/textures/cursor.png");
-  blueNoiseTexture = LoadTexture("res/textures/blue_noise_1024x.png");
 
   user.brush.img = LoadImage("res/textures/brush.png");
   user.brush.tex = LoadTextureFromImage(user.brush.img);
@@ -86,9 +86,9 @@ Demo::Demo() {
   distFieldBuf    = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
   lastFrameBuf    = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
 
-  changeBitDepth(bufferA,      PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
-  changeBitDepth(bufferB,      PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
-  changeBitDepth(bufferC,      PIXELFORMAT_UNCOMPRESSED_R16G16B16A16);
+  changeBitDepth(bufferA,      PIXELFORMAT_UNCOMPRESSED_R32G32B32A32);
+  changeBitDepth(bufferB,      PIXELFORMAT_UNCOMPRESSED_R32G32B32A32);
+  changeBitDepth(bufferC,      PIXELFORMAT_UNCOMPRESSED_R32G32B32A32);
   changeBitDepth(sceneBuf,     PIXELFORMAT_UNCOMPRESSED_R5G5B5A1);
   changeBitDepth(distFieldBuf, PIXELFORMAT_UNCOMPRESSED_R16);
 }
@@ -109,8 +109,8 @@ void Demo::render() {
   const Shader& prepJfaShader   = shaders["prepjfa.frag"];
   const Shader& scenePrepShader = shaders["prepscene.frag"];
   const Shader& distFieldShader = shaders["distfield.frag"];
-  const Shader& lastFrameShader = shaders["gilastframe.frag"];
-  const Shader& finalShader = shaders["final.frag"];
+  const Shader& prepGiShader    = shaders["prepgi.frag"];
+  const Shader& finalShader     = shaders["final.frag"];
 
   Vector2 resolution = { SCREEN_WIDTH, SCREEN_HEIGHT };
 
@@ -126,6 +126,7 @@ void Demo::render() {
       SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uMousePos"),   &mousePos, SHADER_UNIFORM_VEC2);
       SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
       SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uTime"),       &time,       SHADER_UNIFORM_FLOAT);
+      SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uOrbs"),       &orbs,       SHADER_UNIFORM_INT);
       DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
     EndShaderMode();
   EndTextureMode();
@@ -174,10 +175,10 @@ void Demo::render() {
   resolution *= GetWindowScaleDPI();
 
   BeginTextureMode(radianceBufferB);
-    BeginShaderMode(lastFrameShader);
-      SetShaderValueTexture(lastFrameShader, GetShaderLocation(lastFrameShader, "uSceneMap"), sceneBuf.texture);
-      SetShaderValueTexture(lastFrameShader, GetShaderLocation(lastFrameShader, "uLastFrame"), lastFrameBuf.texture);
-      SetShaderValue(lastFrameShader, GetShaderLocation(lastFrameShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
+    BeginShaderMode(prepGiShader);
+      SetShaderValueTexture(prepGiShader, GetShaderLocation(prepGiShader, "uSceneMap"), sceneBuf.texture);
+      SetShaderValueTexture(prepGiShader, GetShaderLocation(prepGiShader, "uLastFrame"), lastFrameBuf.texture);
+      SetShaderValue(prepGiShader, GetShaderLocation(prepGiShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
       DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
     EndShaderMode();
   EndTextureMode();
@@ -187,7 +188,6 @@ void Demo::render() {
       ClearBackground(BLANK);
       SetShaderValueTexture(giShader, GetShaderLocation(giShader, "uDistanceField"), distFieldBuf.texture);
       SetShaderValueTexture(giShader, GetShaderLocation(giShader, "uSceneMap"),      sceneBuf.texture);
-      SetShaderValueTexture(giShader, GetShaderLocation(giShader, "uBlueNoise"),     blueNoiseTexture);
       SetShaderValueTexture(giShader, GetShaderLocation(giShader, "uLastFrame"),     radianceBufferB.texture);
       SetShaderValue(giShader, GetShaderLocation(giShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
       SetShaderValue(giShader, GetShaderLocation(giShader, "uRaysPerPx"),  &raysPerPx,  SHADER_UNIFORM_INT);
@@ -223,7 +223,6 @@ void Demo::renderUI() {
   ImGuiIO& io = ImGui::GetIO();
   if (!io.WantCaptureMouse && !skipUIRendering) {
     ImGui::SetMouseCursor(ImGuiMouseCursor_None);
-
     DrawTextureEx(cursorTex,
                   Vector2{ (float)(GetMouseX() - cursorTex.width / 2 * CURSOR_SIZE),
                            (float)(GetMouseY() - cursorTex.height/ 2 * CURSOR_SIZE) },
@@ -261,6 +260,9 @@ void Demo::renderUI() {
       ImGui::SliderInt("##jfa steps",     &jfaSteps, 0, 512, "jfa steps = %i");
       ImGui::SliderFloat("##point a",     &pointA, 0.0, 1.0, "a = %f");
       ImGui::SliderFloat("##point b",     &pointB, 0.0, 1.0, "b = %f");
+      bool orbsBool = (orbs == 1);
+      ImGui::Checkbox("light orb circle", &orbsBool);
+      orbs = (int)orbsBool;
       if (ImGui::SmallButton("show buffers")) debugShowBuffers = !debugShowBuffers;
       if (debugShowBuffers) {
         if (ImGui::BeginTable("buffer_table", 2)) {

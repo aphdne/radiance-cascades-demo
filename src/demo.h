@@ -55,14 +55,15 @@ class Demo {
     bool sceneHasChanged;
     float pointA;
     float pointB;
+    int orbs; // bool uniform
 
     // UI
 
     bool skipUIRendering;
     bool debugShowBuffers;
     WindowData debugWindowData;
-    bool help;
     Vector2 lastMousePos;
+    bool help;
 
     // RESOURCES
     bool giPing = false;
@@ -72,7 +73,6 @@ class Demo {
     ImageTexture emissionMap;
 
     Texture cursorTex;
-    Texture blueNoiseTexture;
 
     RenderTexture2D sceneBuf;
     RenderTexture2D bufferA;

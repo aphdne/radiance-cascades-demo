@@ -3,7 +3,7 @@
 #define PI 3.141596
 #define TWO_PI 6.2831853071795864769252867665590
 #define TAU 0.0008
-#define DECAY_RATE 1.2
+#define DECAY_RATE 1.3
 
 out vec4 fragColor;
 
@@ -13,7 +13,6 @@ uniform int  uMaxSteps;
 
 uniform sampler2D uDistanceField;
 uniform sampler2D uSceneMap;
-uniform sampler2D uBlueNoise;
 uniform sampler2D uLastFrame;
 
 /* this shader performs "radiosity-based GI" - see comments */
@@ -32,7 +31,6 @@ vec3 raymarch(vec2 uv, vec2 dir) {
     uv += (dir * dist) / (uResolution.x/uResolution.y); // march our ray (divided by our aspect ratio so no skewed directions)
 
     // skip UVs outside of the window
-    // our Y coordinate is upside down
     if (uv.x != clamp(uv.x,  0.0, 1.0) || uv.y != clamp(uv.y, 0.0, 1.0))
       return vec3(0.0);
 
@@ -42,33 +40,39 @@ vec3 raymarch(vec2 uv, vec2 dir) {
   return vec3(0.0);
 }
 
-vec3 lin_to_srgb(vec3 color)
-{
-   vec3 x = color.rgb * 12.92;
-   vec3 y = 1.055 * pow(clamp(color.rgb, 0.0, 1.0), vec3(0.4166667)) - 0.055;
-   vec3 clr = color.rgb;
-   clr.r = (color.r < 0.0031308) ? x.r : y.r;
-   clr.g = (color.g < 0.0031308) ? x.g : y.g;
-   clr.b = (color.b < 0.0031308) ? x.b : y.b;
-   return clr.rgb;
+// sourced from https://gist.github.com/patriciogonzalezvivo/670c22f3966e662d2f83
+float rand(vec2 n) {
+	return fract(sin(dot(n, vec2(12.9898, 4.1414))) * 43758.5453);
+}
+
+float noise(vec2 p){
+	vec2 ip = floor(p);
+	vec2 u = fract(p);
+	u = u*u*(3.0-2.0*u);
+
+	float res = mix(
+		mix(rand(ip),rand(ip+vec2(1.0,0.0)),u.x),
+		mix(rand(ip+vec2(0.0,1.0)),rand(ip+vec2(1.0,1.0)),u.x),u.y);
+	return res*res;
 }
 
 void main() {
  /*
   * To calculate the light value of a pixel we cast `uRaysPerPx` amount of rays in all directions
-  * and add all of the resulting samples up
-  // */
+  * and add all of the resulting samples up, then divide by uRaysPerPx
+  */
   vec2 fragCoord = gl_FragCoord.xy/uResolution;
 
   float dist = texture(uDistanceField, fragCoord).r;
+  float noise = noise(fragCoord.xy * 2000);
   vec3 light = texture(uLastFrame, fragCoord).rgb;
 
   if (dist >= TAU) { // if we're not already in a wall
     // cast rays angularly with equal angles between them
     for (float i = 0.0; i < TWO_PI; i += TWO_PI / uRaysPerPx) {
-      vec3 hitcol = raymarch(fragCoord, vec2(cos(i) * uResolution.y/uResolution.x, sin(i)));
+      float angle = i + noise;
+      vec3 hitcol = raymarch(fragCoord, vec2(cos(angle) * uResolution.y/uResolution.x, sin(angle)));
       light += hitcol;
-      // brightness += max(hitcol.r, max(hitcol.g, hitcol.b));
     }
     light /= uRaysPerPx;
   }
