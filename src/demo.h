@@ -53,6 +53,7 @@ class Demo {
     int raysPerPx;
     bool debug;
     bool sceneHasChanged;
+    bool gi;
     float pointA;
     float pointB;
     int orbs; // bool uniform

@@ -14,6 +14,7 @@ Demo::Demo() {
   pointA = 0.0;
   pointB = 1.0;
   orbs = 0.0;
+  gi = false;
 
   user.mode= DRAWING;
   userSetRandomColor();
@@ -104,6 +105,7 @@ void Demo::render() {
   ClearBackground(PINK);
 
   // const Shader& rcShader  = shaders["rc.frag"];
+  const Shader& rcShader        = shaders["rc.frag"];
   const Shader& giShader        = shaders["gi.frag"];
   const Shader& jfaShader       = shaders["jfa.frag"];
   const Shader& prepJfaShader   = shaders["prepjfa.frag"];
@@ -183,18 +185,49 @@ void Demo::render() {
     EndShaderMode();
   EndTextureMode();
 
-  BeginTextureMode(radianceBufferA);
-    BeginShaderMode(giShader);
-      ClearBackground(BLANK);
-      SetShaderValueTexture(giShader, GetShaderLocation(giShader, "uDistanceField"), distFieldBuf.texture);
-      SetShaderValueTexture(giShader, GetShaderLocation(giShader, "uSceneMap"),      sceneBuf.texture);
-      SetShaderValueTexture(giShader, GetShaderLocation(giShader, "uLastFrame"),     radianceBufferB.texture);
-      SetShaderValue(giShader, GetShaderLocation(giShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
-      SetShaderValue(giShader, GetShaderLocation(giShader, "uRaysPerPx"),  &raysPerPx,  SHADER_UNIFORM_INT);
-      SetShaderValue(giShader, GetShaderLocation(giShader, "uMaxSteps"),   &maxSteps,   SHADER_UNIFORM_INT);
-      DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
-    EndShaderMode();
-  EndTextureMode();
+  if (gi) {
+    BeginTextureMode(radianceBufferA);
+      BeginShaderMode(giShader);
+        ClearBackground(BLANK);
+        SetShaderValueTexture(giShader, GetShaderLocation(giShader, "uDistanceField"), distFieldBuf.texture);
+        SetShaderValueTexture(giShader, GetShaderLocation(giShader, "uSceneMap"),      sceneBuf.texture);
+        SetShaderValueTexture(giShader, GetShaderLocation(giShader, "uLastFrame"),     radianceBufferB.texture);
+        SetShaderValue(giShader, GetShaderLocation(giShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
+        SetShaderValue(giShader, GetShaderLocation(giShader, "uRaysPerPx"),  &raysPerPx,  SHADER_UNIFORM_INT);
+        SetShaderValue(giShader, GetShaderLocation(giShader, "uMaxSteps"),   &maxSteps,   SHADER_UNIFORM_INT);
+        DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
+      EndShaderMode();
+    EndTextureMode();
+  } else {
+    for (int i = 0; i < 2; i++) {
+      radianceBufferC = radianceBufferA;
+      radianceBufferA = radianceBufferB;
+      radianceBufferB = radianceBufferC;
+
+
+      #define BASE_RAY_COUNT 16
+      float intervalStart = i == 0 ? 0.0   : 0.125;
+      float intervalEnd   = i == 0 ? 0.125 : 1.0;
+      int rayCount = pow(BASE_RAY_COUNT, i+1); // angular resolution
+      float linearResolution = i == 0 ? 1.0 : 4.0;
+
+      BeginTextureMode(radianceBufferA);
+        BeginShaderMode(rcShader);
+          ClearBackground(BLANK);
+          SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uDistanceField"), distFieldBuf.texture);
+          SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uSceneMap"),      sceneBuf.texture);
+          SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uLastPass"),      radianceBufferC.texture);
+          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uResolution"), &resolution,   SHADER_UNIFORM_VEC2);
+          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uRaysPerPx"),  &rayCount, SHADER_UNIFORM_INT);
+          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uLinearResolution"),  &linearResolution, SHADER_UNIFORM_FLOAT);
+          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uMaxSteps"),   &maxSteps,     SHADER_UNIFORM_INT);
+          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uPointA"),   &intervalStart,  SHADER_UNIFORM_FLOAT);
+          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uPointB"),   &intervalEnd,    SHADER_UNIFORM_FLOAT);
+          DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
+        EndShaderMode();
+      EndTextureMode();
+    }
+  }
 
   BeginTextureMode(lastFrameBuf);
     DrawTextureRec(radianceBufferA.texture, {0, 0.0, SCREEN_WIDTH, SCREEN_HEIGHT}, {0.0, 0.0}, WHITE);
@@ -263,14 +296,15 @@ void Demo::renderUI() {
       bool orbsBool = (orbs == 1);
       ImGui::Checkbox("light orb circle", &orbsBool);
       orbs = (int)orbsBool;
+      ImGui::Checkbox("gi", &gi);
       if (ImGui::SmallButton("show buffers")) debugShowBuffers = !debugShowBuffers;
       if (debugShowBuffers) {
         if (ImGui::BeginTable("buffer_table", 2)) {
-          ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            rlImGuiImageSizeV(&emissionMap.tex,      {80, 60});
-            ImGui::TableSetColumnIndex(1);
-            rlImGuiImageSizeV(&occlusionMap.tex,     {80, 60});
+          // ImGui::TableNextRow();
+          //   ImGui::TableSetColumnIndex(0);
+          //   rlImGuiImageSizeV(&emissionMap.tex,      {80, 60});
+          //   ImGui::TableSetColumnIndex(1);
+          //   rlImGuiImageSizeV(&occlusionMap.tex,     {80, 60});
           ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
             rlImGuiImageSizeV(&sceneBuf.texture,     {80, 60});
@@ -283,7 +317,10 @@ void Demo::renderUI() {
             ImGui::TableSetColumnIndex(0);
             rlImGuiImageSizeV(&radianceBufferA.texture,      {80, 60});
             ImGui::TableSetColumnIndex(1);
-            rlImGuiImageSizeV(&lastFrameBuf.texture,      {80, 60});
+            rlImGuiImageSizeV(&radianceBufferB.texture,      {80, 60});
+          ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            rlImGuiImageSizeV(&radianceBufferC.texture,      {80, 60});
           ImGui::EndTable();
         }
       }

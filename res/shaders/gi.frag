@@ -3,7 +3,7 @@
 #define PI 3.141596
 #define TWO_PI 6.2831853071795864769252867665590
 #define TAU 0.0008
-#define DECAY_RATE 1.3
+#define DECAY_RATE 1.1
 
 out vec4 fragColor;
 
@@ -58,24 +58,24 @@ float noise(vec2 p){
 
 void main() {
  /*
-  * To calculate the light value of a pixel we cast `uRaysPerPx` amount of rays in all directions
+  * To calculate the radiance value of a pixel we cast `uRaysPerPx` amount of rays in all directions
   * and add all of the resulting samples up, then divide by uRaysPerPx
   */
   vec2 fragCoord = gl_FragCoord.xy/uResolution;
 
   float dist = texture(uDistanceField, fragCoord).r;
   float noise = noise(fragCoord.xy * 2000);
-  vec3 light = texture(uLastFrame, fragCoord).rgb;
+  vec3 radiance = texture(uLastFrame, fragCoord).rgb;
 
   if (dist >= TAU) { // if we're not already in a wall
     // cast rays angularly with equal angles between them
     for (float i = 0.0; i < TWO_PI; i += TWO_PI / uRaysPerPx) {
       float angle = i + noise;
       vec3 hitcol = raymarch(fragCoord, vec2(cos(angle) * uResolution.y/uResolution.x, sin(angle)));
-      light += hitcol;
+      radiance += hitcol;
     }
-    light /= uRaysPerPx;
+    radiance /= uRaysPerPx;
   }
 
-  fragColor = vec4(light, 1.0);
+  fragColor = vec4(radiance, 1.0);
 }
