@@ -58,8 +58,12 @@ void main() {
 
   fragColor = (max(e.a, o.a) == e.a) ? e : o;
 
-
   vec2 p;
+
+  // p = vec2(uMousePos.x, uMousePos.y);
+  // if (sdfCircle(p, uResolution.x/80))
+  //   fragColor = vec4(1.0);
+
   if (uOrbs == 1) {
    for (int i = 0; i < 6; i++) {
       p = (vec2(cos(uTime/ORB_SPEED+i), sin(uTime/ORB_SPEED+i)) * uResolution.y/2 + 1) / 2 + CENTRE;

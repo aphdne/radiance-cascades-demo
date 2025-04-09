@@ -7,17 +7,17 @@
 
 out vec4 fragColor;
 
-uniform vec2 uResolution;
-uniform int  uRaysPerPx;
-uniform int  uMaxSteps;
-
 uniform sampler2D uDistanceField;
 uniform sampler2D uSceneMap;
 uniform sampler2D uLastFrame;
 
+uniform vec2 uResolution;
+uniform int  uRaysPerPx;
+uniform int  uMaxSteps;
+
 /* this shader performs "radiosity-based GI" - see comments */
 
-vec3 raymarch(vec2 uv, vec2 dir) {
+vec4 raymarch(vec2 uv, vec2 dir) {
   /*
    * Raymarching entails iteratively stepping a ray by a certain amount using a distance field. We recursively
    * read the ray's position against a distance field, which tells us how far away the nearest surface is. Once
@@ -32,12 +32,12 @@ vec3 raymarch(vec2 uv, vec2 dir) {
 
     // skip UVs outside of the window
     if (uv.x != clamp(uv.x,  0.0, 1.0) || uv.y != clamp(uv.y, 0.0, 1.0))
-      return vec3(0.0);
+      break;
 
     if (dist < TAU) // surface hit#
-      return max(texture2D(uLastFrame, uv).rgb, texture2D(uLastFrame, uv - (dir * (1.0/uResolution))).rgb * DECAY_RATE);
+      return max(texture(uLastFrame, uv), texture(uLastFrame, uv - (dir * (1.0/uResolution))) * DECAY_RATE);
   }
-  return vec3(0.0);
+  return vec4(0.0);
 }
 
 // sourced from https://gist.github.com/patriciogonzalezvivo/670c22f3966e662d2f83
@@ -65,17 +65,17 @@ void main() {
 
   float dist = texture(uDistanceField, fragCoord).r;
   float noise = noise(fragCoord.xy * 2000);
-  vec3 radiance = texture(uLastFrame, fragCoord).rgb;
+  vec4 radiance = texture(uLastFrame, fragCoord);
 
   if (dist >= TAU) { // if we're not already in a wall
     // cast rays angularly with equal angles between them
     for (float i = 0.0; i < TWO_PI; i += TWO_PI / uRaysPerPx) {
-      float angle = i + noise;
-      vec3 hitcol = raymarch(fragCoord, vec2(cos(angle) * uResolution.y/uResolution.x, sin(angle)));
+      float angle = i;
+      vec4 hitcol = raymarch(fragCoord, vec2(cos(angle) * uResolution.y/uResolution.x, sin(angle)));
       radiance += hitcol;
     }
     radiance /= uRaysPerPx;
   }
 
-  fragColor = vec4(radiance, 1.0);
+  fragColor = vec4(radiance.rgb, 1.0);
 }

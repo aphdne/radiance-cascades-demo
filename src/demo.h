@@ -57,6 +57,8 @@ class Demo {
     float pointA;
     float pointB;
     int orbs; // bool uniform
+    int cascadeAmount;
+    bool showLowerCascade;
 
     // UI
 

@@ -10,13 +10,15 @@ Demo::Demo() {
   // --- MISC PARAMETERS
   maxSteps = 64;
   jfaSteps = 128;
-  raysPerPx = 64;
-  pointA = 0.0;
+  raysPerPx = 4;
+  pointA = 0.125;
   pointB = 1.0;
   orbs = 0.0;
   gi = false;
+  cascadeAmount = 2 - 1;
+  showLowerCascade = false;
 
-  user.mode= DRAWING;
+  user.mode = DRAWING;
   userSetRandomColor();
 
   // UI
@@ -104,7 +106,6 @@ void Demo::update() {
 void Demo::render() {
   ClearBackground(PINK);
 
-  // const Shader& rcShader  = shaders["rc.frag"];
   const Shader& rcShader        = shaders["rc.frag"];
   const Shader& giShader        = shaders["gi.frag"];
   const Shader& jfaShader       = shaders["jfa.frag"];
@@ -174,8 +175,6 @@ void Demo::render() {
     EndShaderMode();
   EndTextureMode();
 
-  resolution *= GetWindowScaleDPI();
-
   BeginTextureMode(radianceBufferB);
     BeginShaderMode(prepGiShader);
       SetShaderValueTexture(prepGiShader, GetShaderLocation(prepGiShader, "uSceneMap"), sceneBuf.texture);
@@ -199,17 +198,10 @@ void Demo::render() {
       EndShaderMode();
     EndTextureMode();
   } else {
-    for (int i = 0; i < 2; i++) {
+    for (int i = cascadeAmount; i >= 0; i--) {
       radianceBufferC = radianceBufferA;
       radianceBufferA = radianceBufferB;
       radianceBufferB = radianceBufferC;
-
-
-      #define BASE_RAY_COUNT 16
-      float intervalStart = i == 0 ? 0.0   : 0.125;
-      float intervalEnd   = i == 0 ? 0.125 : 1.0;
-      int rayCount = pow(BASE_RAY_COUNT, i+1); // angular resolution
-      float linearResolution = i == 0 ? 1.0 : 4.0;
 
       BeginTextureMode(radianceBufferA);
         BeginShaderMode(rcShader);
@@ -218,19 +210,24 @@ void Demo::render() {
           SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uSceneMap"),      sceneBuf.texture);
           SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uLastPass"),      radianceBufferC.texture);
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uResolution"), &resolution,   SHADER_UNIFORM_VEC2);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uRaysPerPx"),  &rayCount, SHADER_UNIFORM_INT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uLinearResolution"),  &linearResolution, SHADER_UNIFORM_FLOAT);
+          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uRaysPerPx"),  &raysPerPx, SHADER_UNIFORM_INT);
+          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uBaseRayCount"),  &raysPerPx, SHADER_UNIFORM_INT);
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uMaxSteps"),   &maxSteps,     SHADER_UNIFORM_INT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uPointA"),   &intervalStart,  SHADER_UNIFORM_FLOAT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uPointB"),   &intervalEnd,    SHADER_UNIFORM_FLOAT);
+          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uPointA"),   &pointA,  SHADER_UNIFORM_FLOAT);
+          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uCascadeIndex"),  &i, SHADER_UNIFORM_INT);
+          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uCascadeAmount"),  &cascadeAmount, SHADER_UNIFORM_INT);
           DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
         EndShaderMode();
       EndTextureMode();
     }
   }
 
+  resolution *= GetWindowScaleDPI();
+
   BeginTextureMode(lastFrameBuf);
-    DrawTextureRec(radianceBufferA.texture, {0, 0.0, SCREEN_WIDTH, SCREEN_HEIGHT}, {0.0, 0.0}, WHITE);
+    RenderTexture* buf = &radianceBufferA;
+    if (showLowerCascade) buf = &radianceBufferB;
+    DrawTextureRec(buf->texture, {0, 0.0, SCREEN_WIDTH, SCREEN_HEIGHT}, {0.0, 0.0}, WHITE);
   EndTextureMode();
 
   BeginShaderMode(finalShader);
@@ -297,6 +294,7 @@ void Demo::renderUI() {
       ImGui::Checkbox("light orb circle", &orbsBool);
       orbs = (int)orbsBool;
       ImGui::Checkbox("gi", &gi);
+      ImGui::Checkbox("show lower cascade", &showLowerCascade);
       if (ImGui::SmallButton("show buffers")) debugShowBuffers = !debugShowBuffers;
       if (debugShowBuffers) {
         if (ImGui::BeginTable("buffer_table", 2)) {
