@@ -2,11 +2,10 @@
 
 #define PI 3.141596
 #define TWO_PI 6.2831853071795864769252867665590
-#define TAU 0.0008
+#define EPS 0.0008
 #define DECAY_RATE 1.1
 #define FIRST_LEVEL uCascadeIndex == 0
 #define LAST_LEVEL uCascadeIndex == uCascadeAmount
-#define ASPECT_RATIO uResolution.y / uResolution.x
 
 out vec4 fragColor;
 
@@ -18,14 +17,19 @@ uniform vec2  uResolution;
 uniform int   uBaseRayCount;
 uniform int   uMaxSteps;
 uniform float uPointA;
+uniform float uPointB;
+uniform int   uCascadeDisplayIndex;
 uniform int   uCascadeIndex;
 uniform int   uCascadeAmount;
+uniform int   uSrgb;
+uniform int   uTest;
+uniform float uDecayRate;
 
 struct probe {
   float spacing;       // probe amount per dimension e.g. 1, 2, 4, 16
   vec2 size;           // screen size of probe in screen-space coordinates e.g. 1.0x1.0, 0.5x0.5, etc.
   vec2 position;       // relative coordinates within encapsulating probe
-  vec2 center;         // centre of current probe
+  // vec2 center;         // centre of current probe
   vec2 rayPosition;
   float intervalStart;
   float intervalEnd;
@@ -44,22 +48,22 @@ probe get_probe_info(int index = uCascadeIndex) {
   // screen size of a probe in our current cascade
   // [resolution/1, resolution/2, resolution/4,  resolution/16, ...]
   // [1.0x1.0,      0.5x0.05,     0.25x0.25,     0.0625x0.0625, ...]
-  // (though its in screenspace coordinates 0.0-1.0)
   p.size = 1.0/vec2(p.spacing);
 
   // current position within a probe in our current cascade
   p.position = mod(fragCoord, p.size) * p.spacing;
 
   // centre of current probe
-  p.center = p.position * p.spacing;
+  // p.center = (p.position + vec2(0.5/uResolution)) * p.spacing / uResolution;
+
+  p.rayCount = pow(uBaseRayCount, index+1); // angular resolution
 
   // calculate which group of rays we're calculating this pass
   p.rayPosition = floor(fragCoord / p.size);
 
-  p.intervalStart = FIRST_LEVEL ? 0.0 : uPointA;
-  p.intervalEnd   = FIRST_LEVEL ? uPointA : 1.0;
-
-  p.rayCount = pow(uBaseRayCount, index+1); // angular resolution
+  float a = 0.5; // px
+  p.intervalStart = a * pow(uBaseRayCount, uCascadeIndex) / max(uResolution.x, uResolution.y);
+  p.intervalEnd = a * pow(uBaseRayCount, uCascadeIndex+1) / max(uResolution.x, uResolution.y);
 
   return p;
 }
@@ -77,8 +81,9 @@ vec4 radiance_interval(vec2 uv, vec2 dir, float a, float b) {
       break;
 
     // surface hit
-    if (dist < TAU)
-      return texture(uSceneMap, uv);
+    if (dist < EPS)
+      return max(texture(uSceneMap, uv), texture(uSceneMap, uv - (dir * (1.0/uResolution))) * uDecayRate);
+      // return texture(uSceneMap, uv);
 
     travelledDist += dist;
     if (travelledDist >= b)
@@ -99,7 +104,6 @@ vec3 lin_to_srgb(vec3 color)
 }
 
 void main() {
-
   vec4 radiance = vec4(0.0);
 
   probe p = get_probe_info();
@@ -107,14 +111,14 @@ void main() {
   float baseIndex = float(uBaseRayCount) * (p.rayPosition.x + (p.spacing * p.rayPosition.y));
 
   for (float i = 0.0; i < uBaseRayCount; i++) {
-    float index = baseIndex + i ;
+    float index = baseIndex + i;
     float angle = (index / p.rayCount) * TWO_PI;
 
     vec4 deltaRadiance = vec4(0.0);
 
     deltaRadiance += radiance_interval(
       p.position,
-      vec2(cos(angle) * uResolution.y / uResolution.x, sin(angle)),
+      vec2(cos(angle) * min(uResolution.x, uResolution.y) / max(uResolution.x, uResolution.y), sin(angle)),
       p.intervalStart,
       p.intervalEnd
     );
@@ -122,22 +126,26 @@ void main() {
     if (!(LAST_LEVEL) && deltaRadiance.a == 0.0) {
       probe up = get_probe_info(uCascadeIndex+1);
 
-      float sqrtBase = sqrt(uBaseRayCount);
-      vec2 upperPosition = vec2(
-        mod(index, sqrtBase), floor(index / up.spacing)
-      ) * (up.size * uResolution);
+      up.position = vec2(
+        mod(index, up.spacing), floor(index / up.spacing)
+      ) * up.size;
 
-      vec2 offset = ((p.position + vec2(0.0, 0.0)) * uResolution) / sqrtBase;
-      vec2 uv = (upperPosition + offset) / uResolution;
+      #define PIXEL vec2(1.0)/uResolution
+      vec2 offset = p.position / up.spacing;
+      offset = clamp(offset, PIXEL, up.size - PIXEL);
+      vec2 uv = up.position + offset;
 
       deltaRadiance += texture(uLastPass, uv);
     }
     radiance += deltaRadiance;
   }
   radiance /= uBaseRayCount;
+  // radiance *= 1.1;
 
-  // if (FIRST_LEVEL) radiance = vec4(vec3(radiance.a), 1.0);
-  // if (FIRST_LEVEL) radiance = vec4(vec3(texture(uLastPass, gl_FragCoord.xy/uResolution)), 1.0);
+  if (uCascadeIndex < uCascadeDisplayIndex) radiance = vec4(vec3(texture(uLastPass, gl_FragCoord.xy/uResolution)), 1.0);
 
-  fragColor = vec4((FIRST_LEVEL) ? lin_to_srgb(radiance.rgb) : radiance.rgb, 1.0);
+  fragColor = vec4((FIRST_LEVEL && (uSrgb == 1 && uTest == 1)) ? radiance.rgb*1.5 : radiance.rgb, 1.0);
+  // if (uTest == 1) {
+  //   fragColor = texture(uSceneMap, gl_FragCoord.xy/uResolution);
+  // }
 }

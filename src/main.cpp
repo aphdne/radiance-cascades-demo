@@ -10,6 +10,7 @@ int main() {
   title += VERSION_STAGE;
   title += VERSION;
 
+  // SetConfigFlags(FLAG_WINDOW_RESIZABLE);
   InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, title.c_str());
   SetTargetFPS(GetMonitorRefreshRate(GetCurrentMonitor()));
   SetTraceLogLevel(LOG_WARNING);

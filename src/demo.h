@@ -26,6 +26,14 @@ enum Mode {
   LIGHTING,
 };
 
+enum Scene {
+  CLEAR,
+  MAZE,
+  TREES,
+  PENUMBRA,
+  PENUMBRA2
+};
+
 class Demo {
   public:
     Demo();
@@ -40,6 +48,7 @@ class Demo {
     void loadShader(std::string shader);
     void reload();
     void clear();
+    void setScene(Scene scene);
 
     struct {
       Mode         mode;
@@ -48,17 +57,26 @@ class Demo {
       Color        lightColor;
     } user;
 
-    int maxSteps;
-    int jfaSteps;
-    int raysPerPx;
     bool debug;
-    bool sceneHasChanged;
     bool gi;
-    float pointA;
-    float pointB;
-    int orbs; // bool uniform
+    // shader settings
+    // global
+    bool orbs;
+    int maxRaySteps;
+    int jfaSteps;
+    bool srgb;
+
+    // gi
+    int giRayCount;
+    bool giNoise;
+    float giMixFactor;
+    float giDecayRate;
+
+    // rc
+    int rcRayCount;
     int cascadeAmount;
-    bool showLowerCascade;
+    int cascadeDisplayIndex;
+    bool rcBilinear;
 
     // UI
 
@@ -69,7 +87,6 @@ class Demo {
     bool help;
 
     // RESOURCES
-    bool giPing = false;
     std::map<std::string, Shader> shaders;
 
     ImageTexture occlusionMap;
@@ -78,6 +95,7 @@ class Demo {
     Texture cursorTex;
 
     RenderTexture2D sceneBuf;
+    RenderTexture2D tempBuf;
     RenderTexture2D bufferA;
     RenderTexture2D bufferB;
     RenderTexture2D bufferC;
