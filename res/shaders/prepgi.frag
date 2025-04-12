@@ -14,5 +14,5 @@ uniform int uFlipY;
 
 void main() {
   vec2 fragCoord = gl_FragCoord.xy/uResolution;
-	fragColor = vec4(mix(texture2D(uSceneMap,  fragCoord).rgb, texture2D(uLastFrame, vec2(fragCoord.x, (uFlipY == 1) ? -fragCoord.y : fragCoord.y)).rgb, uMixFactor), 1.0);
+	fragColor = vec4(mix(texture(uSceneMap,  fragCoord).rgb, texture(uLastFrame, vec2(fragCoord.x, (uFlipY == 1) ? -fragCoord.y : fragCoord.y)).rgb, uMixFactor), 1.0);
 }
