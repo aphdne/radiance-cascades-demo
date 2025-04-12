@@ -36,7 +36,7 @@ struct probe {
   float rayCount;
 };
 
-probe get_probe_info(int index = uCascadeIndex) {
+probe get_probe_info(int index) {
   probe p;
   vec2 fragCoord = gl_FragCoord.xy/uResolution;
 
@@ -106,7 +106,7 @@ vec3 lin_to_srgb(vec3 color)
 void main() {
   vec4 radiance = vec4(0.0);
 
-  probe p = get_probe_info();
+  probe p = get_probe_info(uCascadeIndex);
 
   float baseIndex = float(uBaseRayCount) * (p.rayPosition.x + (p.spacing * p.rayPosition.y));
 
