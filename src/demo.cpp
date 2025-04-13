@@ -23,6 +23,8 @@ Demo::Demo() {
   cascadeAmount = 5;
   cascadeDisplayIndex = 0;
   rcBilinear = true;
+  rcDisableMerging = false;
+  baseInterval = 0.5;
 
   user.mode = DRAWING;
   userSetRandomColor();
@@ -67,37 +69,7 @@ Demo::Demo() {
   }
   UnloadDirectoryFiles(shaderFiles);
 
-  // change bit depth for bufferA, B, & C so that we can encode texture coordinates without losing data
-  // default Raylib FBOs have a bit depth of 8 per channel, which would only cover for a window of maximum size 255x255
-  // we can also save some memory by reducing bit depth of buffers to what is strictly required
-  auto changeBitDepth = [](RenderTexture2D &buffer, PixelFormat pixformat) {
-    rlEnableFramebuffer(buffer.id);
-      rlUnloadTexture(buffer.texture.id);
-      buffer.texture.id = rlLoadTexture(NULL, SCREEN_WIDTH, SCREEN_HEIGHT, pixformat, 1);
-      buffer.texture.width = SCREEN_WIDTH;
-      buffer.texture.height = SCREEN_HEIGHT;
-      buffer.texture.format = pixformat;
-      buffer.texture.mipmaps = 1;
-      rlFramebufferAttach(buffer.id, buffer.texture.id, RL_ATTACHMENT_COLOR_CHANNEL0, RL_ATTACHMENT_TEXTURE2D, 0);
-    rlDisableFramebuffer();
-  };
-
-  bufferA         = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
-  bufferB         = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
-  bufferC         = bufferA;
-  radianceBufferA = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
-  radianceBufferB = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
-  radianceBufferC = radianceBufferA;
-  sceneBuf        = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
-  tempBuf        = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
-  distFieldBuf    = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
-  lastFrameBuf    = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
-
-  changeBitDepth(bufferA,      PIXELFORMAT_UNCOMPRESSED_R32G32B32A32);
-  changeBitDepth(bufferB,      PIXELFORMAT_UNCOMPRESSED_R32G32B32A32);
-  changeBitDepth(bufferC,      PIXELFORMAT_UNCOMPRESSED_R32G32B32A32);
-  changeBitDepth(sceneBuf,     PIXELFORMAT_UNCOMPRESSED_R5G5B5A1);
-  changeBitDepth(distFieldBuf, PIXELFORMAT_UNCOMPRESSED_R16);
+  setBuffers();
 }
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -119,7 +91,7 @@ void Demo::render() {
   const Shader& prepGiShader    = shaders["prepgi.frag"];
   const Shader& finalShader     = shaders["final.frag"];
 
-  Vector2 resolution = { SCREEN_WIDTH, SCREEN_HEIGHT };
+  Vector2 resolution = { (float)GetScreenWidth(), (float)GetScreenHeight() };
 
   // create scene texture - combining emission & occlusion maps into one texture
   // this is also the step to add dynamic gpu-driven lighting
@@ -135,7 +107,7 @@ void Demo::render() {
       SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
       SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uTime"),       &time,       SHADER_UNIFORM_FLOAT);
       SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uOrbs"),       &orbsInt,       SHADER_UNIFORM_INT);
-      DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
+      DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
     EndShaderMode();
   EndTextureMode();
 
@@ -146,7 +118,7 @@ void Demo::render() {
     BeginShaderMode(prepJfaShader);
       SetShaderValueTexture(prepJfaShader, GetShaderLocation(prepJfaShader, "uSceneMap"), sceneBuf.texture);
       SetShaderValue(prepJfaShader, GetShaderLocation(prepJfaShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
-      DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
+      DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
     EndShaderMode();
   EndTextureMode();
 
@@ -164,7 +136,7 @@ void Demo::render() {
         SetShaderValueTexture(jfaShader, GetShaderLocation(jfaShader, "uCanvas"), bufferB.texture);
         SetShaderValue(jfaShader, GetShaderLocation(jfaShader, "uJumpSize"), &j, SHADER_UNIFORM_INT);
         SetShaderValue(jfaShader, GetShaderLocation(jfaShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
-        DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
+        DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
       EndShaderMode();
     EndTextureMode();
   }
@@ -176,7 +148,7 @@ void Demo::render() {
     BeginShaderMode(distFieldShader);
       SetShaderValueTexture(distFieldShader, GetShaderLocation(distFieldShader, "uJFA"), bufferA.texture);
       SetShaderValue(distFieldShader, GetShaderLocation(distFieldShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
-      DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
+      DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
     EndShaderMode();
   EndTextureMode();
 
@@ -191,7 +163,7 @@ void Demo::render() {
         SetShaderValue(prepGiShader, GetShaderLocation(prepGiShader, "uResolution"), &resolution,  SHADER_UNIFORM_VEC2);
         SetShaderValue(prepGiShader, GetShaderLocation(prepGiShader, "uMixFactor"),  &giMixFactor, SHADER_UNIFORM_FLOAT);
         SetShaderValue(prepGiShader, GetShaderLocation(prepGiShader, "uFlipY"),  &flipY, SHADER_UNIFORM_INT);
-        DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
+        DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
       EndShaderMode();
     EndTextureMode();
 
@@ -208,13 +180,15 @@ void Demo::render() {
         SetShaderValue(giShader, GetShaderLocation(giShader, "uSrgb"),       &srgbInt,     SHADER_UNIFORM_INT);
         SetShaderValue(giShader, GetShaderLocation(giShader, "uNoise"),      &giNoiseInt,  SHADER_UNIFORM_INT);
         SetShaderValue(giShader, GetShaderLocation(giShader, "uDecayRate"),  &giDecayRate, SHADER_UNIFORM_FLOAT);
-        DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
+        DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
       EndShaderMode();
     EndTextureMode();
   } else {
 
     int test = 0;
 
+    int rcDisableMergingInt = rcDisableMerging;
+    int noDisplay = 0;
     for (int i = cascadeAmount; i >= 0; i--) {
       radianceBufferC = radianceBufferA;
       radianceBufferA = radianceBufferB;
@@ -234,72 +208,77 @@ void Demo::render() {
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uResolution"),          &resolution,          SHADER_UNIFORM_VEC2);
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uBaseRayCount"),        &rcRayCount,          SHADER_UNIFORM_INT);
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uMaxSteps"),            &maxRaySteps,         SHADER_UNIFORM_INT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uCascadeDisplayIndex"), &cascadeDisplayIndex, SHADER_UNIFORM_INT);
+          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uBaseInterval"),        &baseInterval,        SHADER_UNIFORM_FLOAT);
+          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uDisableMerging"),      &rcDisableMergingInt,           SHADER_UNIFORM_INT);
+          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uCascadeDisplayIndex"), &cascadeDisplayIndex,           SHADER_UNIFORM_INT);
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uCascadeIndex"),        &i,                   SHADER_UNIFORM_INT);
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uCascadeAmount"),       &cascadeAmount,       SHADER_UNIFORM_INT);
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uSrgb"),                &srgbInt,             SHADER_UNIFORM_INT);
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uTest"),                &test,                SHADER_UNIFORM_INT);
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uDecayRate"),  &giDecayRate, SHADER_UNIFORM_FLOAT);
-          DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
+          DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
         EndShaderMode();
       EndTextureMode();
     }
 
-    flipY = 0;
-    BeginTextureMode(tempBuf);
-      // Vector2 res = {resolution.x, -resolution.y};
-      BeginShaderMode(prepGiShader);
-        SetShaderValueTexture(prepGiShader, GetShaderLocation(prepGiShader, "uSceneMap"), sceneBuf.texture);
-        SetShaderValueTexture(prepGiShader, GetShaderLocation(prepGiShader, "uLastFrame"), radianceBufferA.texture);
-        SetShaderValue(prepGiShader, GetShaderLocation(prepGiShader, "uResolution"), &resolution,  SHADER_UNIFORM_VEC2);
-        SetShaderValue(prepGiShader, GetShaderLocation(prepGiShader, "uMixFactor"),  &giMixFactor, SHADER_UNIFORM_FLOAT);
-        SetShaderValue(prepGiShader, GetShaderLocation(prepGiShader, "uFlipY"),  &flipY, SHADER_UNIFORM_INT);
-        DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
-      EndShaderMode();
-    EndTextureMode();
-    test = 1;
-
-    for (int i = cascadeAmount; i >= 0; i--) {
-      radianceBufferC = radianceBufferA;
-      radianceBufferA = radianceBufferB;
-      radianceBufferB = radianceBufferC;
-
-      if (rcBilinear)
-        SetTextureFilter(radianceBufferC.texture, TEXTURE_FILTER_BILINEAR);
-      else
-        SetTextureFilter(radianceBufferC.texture, TEXTURE_FILTER_POINT);
-
-      BeginTextureMode(radianceBufferA);
-        BeginShaderMode(rcShader);
-          ClearBackground(BLANK);
-          SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uDistanceField"), distFieldBuf.texture);
-          SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uSceneMap"),      tempBuf.texture);
-          SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uLastPass"),      radianceBufferC.texture);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uResolution"),          &resolution,          SHADER_UNIFORM_VEC2);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uBaseRayCount"),        &rcRayCount,          SHADER_UNIFORM_INT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uMaxSteps"),            &maxRaySteps,         SHADER_UNIFORM_INT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uCascadeDisplayIndex"), &cascadeDisplayIndex, SHADER_UNIFORM_INT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uCascadeIndex"),        &i,                   SHADER_UNIFORM_INT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uCascadeAmount"),       &cascadeAmount,       SHADER_UNIFORM_INT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uSrgb"),                &srgbInt,             SHADER_UNIFORM_INT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uTest"),                &test,                SHADER_UNIFORM_INT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uDecayRate"),  &giDecayRate, SHADER_UNIFORM_FLOAT);
-          DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
-        EndShaderMode();
-      EndTextureMode();
-    }
+    // flipY = 0;
+    // BeginTextureMode(tempBuf);
+    //   // Vector2 res = {resolution.x, -resolution.y};
+    //   BeginShaderMode(prepGiShader);
+    //     SetShaderValueTexture(prepGiShader, GetShaderLocation(prepGiShader, "uSceneMap"), sceneBuf.texture);
+    //     SetShaderValueTexture(prepGiShader, GetShaderLocation(prepGiShader, "uLastFrame"), radianceBufferA.texture);
+    //     SetShaderValue(prepGiShader, GetShaderLocation(prepGiShader, "uResolution"), &resolution,  SHADER_UNIFORM_VEC2);
+    //     SetShaderValue(prepGiShader, GetShaderLocation(prepGiShader, "uMixFactor"),  &giMixFactor, SHADER_UNIFORM_FLOAT);
+    //     SetShaderValue(prepGiShader, GetShaderLocation(prepGiShader, "uFlipY"),  &flipY, SHADER_UNIFORM_INT);
+    //     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
+    //   EndShaderMode();
+    // EndTextureMode();
+    // test = 1;
+    //
+    // int rcDisableMergingInt = rcDisableMerging;
+    // for (int i = cascadeAmount; i >= 0; i--) {
+    //   radianceBufferC = radianceBufferA;
+    //   radianceBufferA = radianceBufferB;
+    //   radianceBufferB = radianceBufferC;
+    //
+    //   if (rcBilinear)
+    //     SetTextureFilter(radianceBufferC.texture, TEXTURE_FILTER_BILINEAR);
+    //   else
+    //     SetTextureFilter(radianceBufferC.texture, TEXTURE_FILTER_POINT);
+    //
+    //   BeginTextureMode(radianceBufferA);
+    //     BeginShaderMode(rcShader);
+    //       ClearBackground(BLANK);
+    //       SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uDistanceField"), distFieldBuf.texture);
+    //       SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uSceneMap"),      tempBuf.texture);
+    //       SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uLastPass"),      radianceBufferC.texture);
+    //       SetShaderValue(rcShader, GetShaderLocation(rcShader, "uResolution"),          &resolution,          SHADER_UNIFORM_VEC2);
+    //       SetShaderValue(rcShader, GetShaderLocation(rcShader, "uBaseRayCount"),        &rcRayCount,          SHADER_UNIFORM_INT);
+    //       SetShaderValue(rcShader, GetShaderLocation(rcShader, "uMaxSteps"),            &maxRaySteps,         SHADER_UNIFORM_INT);
+    //       SetShaderValue(rcShader, GetShaderLocation(rcShader, "uBaseInterval"),        &baseInterval,        SHADER_UNIFORM_FLOAT);
+    //       SetShaderValue(rcShader, GetShaderLocation(rcShader, "uDisableMerging"),      &rcDisableMergingInt, SHADER_UNIFORM_INT);
+    //       SetShaderValue(rcShader, GetShaderLocation(rcShader, "uCascadeDisplayIndex"), &cascadeDisplayIndex, SHADER_UNIFORM_INT);
+    //       SetShaderValue(rcShader, GetShaderLocation(rcShader, "uCascadeIndex"),        &i,                   SHADER_UNIFORM_INT);
+    //       SetShaderValue(rcShader, GetShaderLocation(rcShader, "uCascadeAmount"),       &cascadeAmount,       SHADER_UNIFORM_INT);
+    //       SetShaderValue(rcShader, GetShaderLocation(rcShader, "uSrgb"),                &srgbInt,             SHADER_UNIFORM_INT);
+    //       SetShaderValue(rcShader, GetShaderLocation(rcShader, "uTest"),                &test,                SHADER_UNIFORM_INT);
+    //       SetShaderValue(rcShader, GetShaderLocation(rcShader, "uDecayRate"),  &giDecayRate, SHADER_UNIFORM_FLOAT);
+    //       DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
+    //     EndShaderMode();
+    //   EndTextureMode();
+    // }
   }
 
   resolution *= GetWindowScaleDPI();
 
   BeginTextureMode(lastFrameBuf);
-    DrawTextureRec(radianceBufferA.texture, {0, 0.0, SCREEN_WIDTH, SCREEN_HEIGHT}, {0.0, 0.0}, WHITE);
+    DrawTextureRec(radianceBufferA.texture, {0, 0.0, (float)GetScreenWidth(), (float)GetScreenHeight()}, {0.0, 0.0}, WHITE);
   EndTextureMode();
 
   BeginShaderMode(finalShader);
     SetShaderValueTexture(finalShader, GetShaderLocation(finalShader, "uCanvas"), lastFrameBuf.texture);
     SetShaderValue(finalShader, GetShaderLocation(finalShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
-    DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
   EndShaderMode();
 
   if (!skipUIRendering) {
@@ -395,7 +374,9 @@ void Demo::renderUI() {
       // ImGui::SliderInt("##rays per px",   &rcRayCount, 0, 64,  "top cascade probe amount = %i");
       ImGui::SliderInt("##cascade amount",   &cascadeAmount, 0, 32, "cascade amount = %i");
       ImGui::SliderInt("##cascade display",   &cascadeDisplayIndex, 0, cascadeAmount-1, "display cascade = %i");
+      ImGui::SliderFloat("##base interval",   &baseInterval, 0, 64.0, "base interval = %fpx");
       ImGui::Checkbox("bilinear interpolation", &rcBilinear);
+      ImGui::Checkbox("disable merging", &rcDisableMerging);
     }
 
     if (debug) {
@@ -464,6 +445,46 @@ void Demo::processKeyboardInput() {
   if (IsKeyPressed(KEY_A)) userSetRandomColor();
   if (IsKeyPressed(KEY_H)) help = !help;
 }
+
+void Demo::resize() {
+  setBuffers();
+}
+
+void Demo::setBuffers() {
+  // change bit depth for bufferA, B, & C so that we can encode texture coordinates without losing data
+  // default Raylib FBOs have a bit depth of 8 per channel, which would only cover for a window of maximum size 255x255
+  // we can also save some memory by reducing bit depth of buffers to what is strictly required
+  auto changeBitDepth = [](RenderTexture2D &buffer, PixelFormat pixformat) {
+    rlEnableFramebuffer(buffer.id);
+      rlUnloadTexture(buffer.texture.id);
+      buffer.texture.id = rlLoadTexture(NULL, GetScreenWidth(), GetScreenHeight(), pixformat, 1);
+      buffer.texture.width = GetScreenWidth();
+      buffer.texture.height = GetScreenHeight();
+      buffer.texture.format = pixformat;
+      buffer.texture.mipmaps = 1;
+      rlFramebufferAttach(buffer.id, buffer.texture.id, RL_ATTACHMENT_COLOR_CHANNEL0, RL_ATTACHMENT_TEXTURE2D, 0);
+    rlDisableFramebuffer();
+  };
+
+  bufferA         = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
+  bufferB         = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
+  bufferC         = bufferA;
+  radianceBufferA = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
+  radianceBufferB = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
+  radianceBufferC = radianceBufferA;
+  sceneBuf        = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
+  tempBuf        = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
+  distFieldBuf    = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
+  lastFrameBuf    = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
+
+  changeBitDepth(bufferA,      PIXELFORMAT_UNCOMPRESSED_R32G32B32A32);
+  changeBitDepth(bufferB,      PIXELFORMAT_UNCOMPRESSED_R32G32B32A32);
+  changeBitDepth(bufferC,      PIXELFORMAT_UNCOMPRESSED_R32G32B32A32);
+  changeBitDepth(sceneBuf,     PIXELFORMAT_UNCOMPRESSED_R5G5B5A1);
+  changeBitDepth(distFieldBuf, PIXELFORMAT_UNCOMPRESSED_R16);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -562,8 +583,8 @@ void Demo::reload() {
     }
   } else {
     printf("Replacing canvas.\n");
-    if (user.mode == DRAWING) occlusionMap.img = GenImageColor(SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
-    if (user.mode == LIGHTING) emissionMap.img = GenImageColor(SCREEN_WIDTH, SCREEN_HEIGHT, BLACK);
+    if (user.mode == DRAWING) occlusionMap.img = GenImageColor(GetScreenWidth(), GetScreenHeight(), WHITE);
+    if (user.mode == LIGHTING) emissionMap.img = GenImageColor(GetScreenWidth(), GetScreenHeight(), BLACK);
     RELOAD_CANVAS();
   }
 }
@@ -571,16 +592,16 @@ void Demo::reload() {
 void Demo::setScene(Scene scene) {
   switch (scene) {
     case CLEAR:
-      occlusionMap.img = GenImageColor(SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
-      emissionMap.img = GenImageColor(SCREEN_WIDTH, SCREEN_HEIGHT, BLACK);
+      occlusionMap.img = GenImageColor(GetScreenWidth(), GetScreenHeight(), WHITE);
+      emissionMap.img = GenImageColor(GetScreenWidth(), GetScreenHeight(), BLACK);
       break;
     case MAZE:
       occlusionMap.img = LoadImage("res/textures/canvas/maze.png");
-      // emissionMap.img = GenImageColor(SCREEN_WIDTH, SCREEN_HEIGHT, BLACK);
+      // emissionMap.img = GenImageColor(GetScreenWidth(), GetScreenHeight(), BLACK);
       break;
     case TREES:
       occlusionMap.img = LoadImage("res/textures/canvas/trees.png");
-      // emissionMap.img = GenImageColor(SCREEN_WIDTH, SCREEN_HEIGHT, BLACK);
+      // emissionMap.img = GenImageColor(GetScreenWidth(), GetScreenHeight(), BLACK);
       break;
     case PENUMBRA:
       occlusionMap.img = LoadImage("res/textures/canvas/penumbra.png");

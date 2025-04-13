@@ -18,6 +18,8 @@ int main() {
 
   Demo demo;
 
+  int screenWidth = GetScreenWidth();
+  int screenHeight = GetScreenHeight();
   while (!WindowShouldClose())
   {
     demo.processKeyboardInput();
@@ -29,6 +31,11 @@ int main() {
         demo.renderUI();
       rlImGuiEnd();
     EndDrawing();
+    if (screenWidth != GetScreenWidth() || screenHeight != GetScreenHeight()) {
+      screenWidth = GetScreenWidth();
+      screenHeight = GetScreenHeight();
+      demo.resize();
+    }
   }
 
   rlImGuiShutdown();

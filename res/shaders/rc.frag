@@ -24,6 +24,8 @@ uniform int   uCascadeAmount;
 uniform int   uSrgb;
 uniform int   uTest;
 uniform float uDecayRate;
+uniform int uDisableMerging;
+uniform float uBaseInterval;
 
 struct probe {
   float spacing;       // probe amount per dimension e.g. 1, 2, 4, 16
@@ -61,9 +63,13 @@ probe get_probe_info(int index) {
   // calculate which group of rays we're calculating this pass
   p.rayPosition = floor(fragCoord / p.size);
 
-  float a = 0.5; // px
-  p.intervalStart = a * pow(uBaseRayCount, uCascadeIndex) / max(uResolution.x, uResolution.y);
+  float a = uBaseInterval; // px
+  p.intervalStart = (FIRST_LEVEL) ? 0.0 : a * pow(uBaseRayCount, uCascadeIndex) / max(uResolution.x, uResolution.y);
   p.intervalEnd = a * pow(uBaseRayCount, uCascadeIndex+1) / max(uResolution.x, uResolution.y);
+
+  // float offset = 1.5/uResolution.x;
+  // p.intervalStart += offset;
+  // p.intervalEnd += offset;
 
   return p;
 }
@@ -123,7 +129,7 @@ void main() {
       p.intervalEnd
     );
 
-    if (!(LAST_LEVEL) && deltaRadiance.a == 0.0) {
+    if (!(LAST_LEVEL) && deltaRadiance.a == 0.0 && uDisableMerging != 1.0) {
       probe up = get_probe_info(uCascadeIndex+1);
 
       up.position = vec2(

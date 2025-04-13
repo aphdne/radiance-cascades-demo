@@ -42,6 +42,7 @@ class Demo {
     void renderUI();
     void processKeyboardInput();
     void processMouseInput();
+    void resize();
 
   private:
     void userSetRandomColor();
@@ -49,6 +50,7 @@ class Demo {
     void reload();
     void clear();
     void setScene(Scene scene);
+    void setBuffers();
 
     struct {
       Mode         mode;
@@ -77,6 +79,8 @@ class Demo {
     int cascadeAmount;
     int cascadeDisplayIndex;
     bool rcBilinear;
+    bool rcDisableMerging;
+    float baseInterval;
 
     // UI
 
