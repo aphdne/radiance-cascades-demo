@@ -10,9 +10,9 @@ int main() {
   title += VERSION_STAGE;
   title += VERSION;
 
-  // SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+  SetConfigFlags(FLAG_WINDOW_RESIZABLE);
   InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, title.c_str());
-  SetTargetFPS(GetMonitorRefreshRate(GetCurrentMonitor()));
+  // SetTargetFPS(GetMonitorRefreshRate(GetCurrentMonitor()));
   SetTraceLogLevel(LOG_WARNING);
   rlImGuiSetup(true);
 
@@ -30,12 +30,12 @@ int main() {
       rlImGuiBegin();
         demo.renderUI();
       rlImGuiEnd();
+      if (screenWidth != GetScreenWidth() || screenHeight != GetScreenHeight()) {
+        screenWidth = GetScreenWidth();
+        screenHeight = GetScreenHeight();
+        demo.resize();
+      }
     EndDrawing();
-    if (screenWidth != GetScreenWidth() || screenHeight != GetScreenHeight()) {
-      screenWidth = GetScreenWidth();
-      screenHeight = GetScreenHeight();
-      demo.resize();
-    }
   }
 
   rlImGuiShutdown();

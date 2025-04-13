@@ -13,6 +13,7 @@ uniform vec2 uMousePos;
 uniform vec2 uResolution;
 uniform float uTime;
 uniform int uOrbs;
+uniform int uRainbow;
 
 /*
  * this shader prepares the canvas texture to be processed by the jump-flood algorithm in jfa.frag
@@ -52,9 +53,15 @@ void main() {
   else
     o = vec4(0.0, 0.0, 0.0, 1.0);
 
-  float v = rgb2hsv(e.xyz).z;
-  if (v < 0.99)
+  // float v = rgb2hsv(e.xyz).z;
+  // if (v < 0.01)
+  vec3 ehsv = rgb2hsv(vec3(e.rgb));
+  if (e == vec4(0.0, 0.0, 0.0, 1.0))
     e = vec4(0.0);
+  else if (uRainbow == 1)
+    e = vec4(hsv2rgb(vec3(ehsv.r + uTime/8, 1.0, 1.0)), 1.0);
+
+
 
   fragColor = (max(e.a, o.a) == e.a) ? e : o;
 

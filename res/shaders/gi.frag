@@ -3,7 +3,6 @@
 #define PI 3.141596
 #define TWO_PI 6.2831853071795864769252867665590
 #define EPS 0.0008
-#define DECAY_RATE 1.5
 
 out vec4 fragColor;
 
@@ -17,6 +16,7 @@ uniform int   uMaxSteps;
 uniform int   uSrgb;
 uniform int   uNoise;
 uniform float uDecayRate;
+uniform float uMixFactor;
 
 /* this shader performs "radiosity-based GI" - see comments */
 
@@ -31,14 +31,25 @@ vec4 raymarch(vec2 uv, vec2 dir) {
    */
   for (int i = 0; i < uMaxSteps; i++) {
     float dist = texture(uDistanceField, uv).r;               // sample distance field
-    uv += (dir * dist) / (uResolution.x/uResolution.y); // march our ray (divided by our aspect ratio so no skewed directions)
+    uv += (dir * dist) / (max(uResolution.x, uResolution.y)/min(uResolution.y, uResolution.x)); // march our ray (divided by our aspect ratio so no skewed directions)
 
     // skip UVs outside of the window
     if (uv.x != clamp(uv.x,  0.0, 1.0) || uv.y != clamp(uv.y, 0.0, 1.0))
       break;
 
-    if (dist < EPS) // surface hit#
-      return max(texture(uLastFrame, uv), texture(uLastFrame, uv - (dir * (1.0/uResolution))) * uDecayRate);
+    if (dist < EPS) // surface hit
+	    return vec4(
+        // here we're mixing the scene map with the previous frame
+        mix(
+          texture(uSceneMap,  uv).rgb,
+          max(
+            // we pick the maximum of either the last frame at `uv` or at the pixel right before `uv`
+            // this is also where we can define the decay rate of the indirect lighting
+            texture(uLastFrame, vec2(uv.x, -uv.y)).rgb,
+            texture(uLastFrame, vec2(uv.x, -uv.y) - (dir * (1.0/uResolution))).rgb * uDecayRate
+          ),
+          uMixFactor
+        ), 1.0);
   }
   return vec4(0.0);
 }
@@ -79,7 +90,7 @@ void main() {
 
   float dist = texture(uDistanceField, fragCoord).r;
   float noise = noise(fragCoord.xy * 2000);
-  vec4 radiance = texture(uLastFrame, fragCoord);
+  vec4 radiance = texture(uSceneMap, fragCoord);
 
   if (dist >= EPS) { // if we're not already in a wall
     // cast rays angularly with equal angles between them

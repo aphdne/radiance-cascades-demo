@@ -22,7 +22,6 @@ uniform int   uCascadeDisplayIndex;
 uniform int   uCascadeIndex;
 uniform int   uCascadeAmount;
 uniform int   uSrgb;
-uniform int   uTest;
 uniform float uDecayRate;
 uniform int uDisableMerging;
 uniform float uBaseInterval;
@@ -66,10 +65,6 @@ probe get_probe_info(int index) {
   float a = uBaseInterval; // px
   p.intervalStart = (FIRST_LEVEL) ? 0.0 : a * pow(uBaseRayCount, uCascadeIndex) / max(uResolution.x, uResolution.y);
   p.intervalEnd = a * pow(uBaseRayCount, uCascadeIndex+1) / max(uResolution.x, uResolution.y);
-
-  // float offset = 1.5/uResolution.x;
-  // p.intervalStart += offset;
-  // p.intervalEnd += offset;
 
   return p;
 }
@@ -150,8 +145,5 @@ void main() {
 
   if (uCascadeIndex < uCascadeDisplayIndex) radiance = vec4(vec3(texture(uLastPass, gl_FragCoord.xy/uResolution)), 1.0);
 
-  fragColor = vec4((FIRST_LEVEL && (uSrgb == 1 && uTest == 1)) ? radiance.rgb*1.5 : radiance.rgb, 1.0);
-  // if (uTest == 1) {
-  //   fragColor = texture(uSceneMap, gl_FragCoord.xy/uResolution);
-  // }
+  fragColor = vec4((FIRST_LEVEL && uSrgb == 1) ? radiance.rgb*1.5 : radiance.rgb, 1.0);
 }

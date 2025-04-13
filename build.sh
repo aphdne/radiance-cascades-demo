@@ -5,6 +5,7 @@ if [ ! -d "./build" ]; then
 fi
 
 pushd build
+rm ./radiance_cascades
 cmake ..
 make
 popd

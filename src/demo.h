@@ -3,7 +3,6 @@
 
 #include <map>
 #include <iostream>
-// #include <vector>
 #include "config.h"
 #include "raylib.h"
 #include "raymath.h"
@@ -14,11 +13,6 @@
 struct WindowData {
   ImGuiWindowFlags flags = 0;
   bool open              = true;
-};
-
-struct ImageTexture {
-  Image     img;
-  Texture2D tex;
 };
 
 enum Mode {
@@ -47,26 +41,27 @@ class Demo {
   private:
     void userSetRandomColor();
     void loadShader(std::string shader);
-    void reload();
-    void clear();
     void setScene(Scene scene);
     void setBuffers();
 
     struct {
       Mode         mode;
-      ImageTexture brush;
+      Texture      brushTexture;
       float        brushSize;
-      Color        lightColor;
+      Color        brushColor;
     } user;
 
     bool debug;
     bool gi;
+
     // shader settings
     // global
     bool orbs;
     int maxRaySteps;
     int jfaSteps;
     bool srgb;
+    bool drawRainbow;
+    bool rainbowAnimation;
 
     // gi
     int giRayCount;
@@ -93,9 +88,6 @@ class Demo {
     // RESOURCES
     std::map<std::string, Shader> shaders;
 
-    ImageTexture occlusionMap;
-    ImageTexture emissionMap;
-
     Texture cursorTex;
 
     RenderTexture2D sceneBuf;
@@ -108,6 +100,8 @@ class Demo {
     RenderTexture2D radianceBufferB;
     RenderTexture2D radianceBufferC;
     RenderTexture2D lastFrameBuf;
+    RenderTexture2D occlusionBuf;
+    RenderTexture2D emissionBuf;
 };
 
 #endif /* DEMO_H */
