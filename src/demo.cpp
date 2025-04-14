@@ -7,6 +7,8 @@ Demo::Demo() {
 
   orbs = false;
   srgb = false;
+  drawRainbow = false;
+  rainbowAnimation = false;
 
   gi = false;
   giRayCount = 64;
@@ -30,16 +32,33 @@ Demo::Demo() {
   debug = false;
   help  = true;
 
-  debugWindowData.flags |= ImGuiWindowFlags_NoTitleBar;
-  debugWindowData.flags |= ImGuiWindowFlags_NoScrollbar;
-  debugWindowData.flags |= ImGuiWindowFlags_NoMove;
+  // debugWindowData.flags |= ImGuiWindowFlags_NoTitleBar;
+  // debugWindowData.flags |= ImGuiWindowFlags_NoScrollbar;
+  // debugWindowData.flags |= ImGuiWindowFlags_NoMove;
   debugWindowData.flags |= ImGuiWindowFlags_NoResize;
-  debugWindowData.flags |= ImGuiWindowFlags_NoCollapse;
+  // debugWindowData.flags |= ImGuiWindowFlags_NoCollapse;
   debugWindowData.flags |= ImGuiWindowFlags_NoBackground;
-  debugWindowData.flags |= ImGuiWindowFlags_NoNav;
+  // debugWindowData.flags |= ImGuiWindowFlags_NoNav;
+  debugWindowData.size = ImVec2{250, 400};
+  debugWindowData.pos  = ImVec2{4, 4};
+
+  sceneWindowData.flags |= ImGuiWindowFlags_NoScrollbar;
+  sceneWindowData.flags |= ImGuiWindowFlags_NoResize;
+  sceneWindowData.flags |= ImGuiWindowFlags_NoBackground;
+  sceneWindowData.size = ImVec2{200, 260};
+
+  colorWindowData.flags |= ImGuiWindowFlags_NoScrollbar;
+  colorWindowData.flags |= ImGuiWindowFlags_NoResize;
+  colorWindowData.flags |= ImGuiWindowFlags_NoBackground;
+  colorWindowData.size = ImVec2{180, 260};
+
+  lightingWindowData.flags |= ImGuiWindowFlags_NoScrollbar;
+  lightingWindowData.flags |= ImGuiWindowFlags_NoResize;
+  lightingWindowData.flags |= ImGuiWindowFlags_NoBackground;
+  lightingWindowData.size = ImVec2{200, 260};
 
   ImGui::GetIO().IniFilename = NULL;
-
+  ImGui::LoadIniSettingsFromDisk("imgui.ini");
   HideCursor();
 
   // --- LOAD RESOURCES
@@ -89,16 +108,14 @@ void Demo::render() {
   float   time = GetTime();
   Vector2 mousePos = GetMousePosition();
   int     mouseDown = (IsMouseButtonDown(0) || IsMouseButtonDown(1)) && !ImGui::GetIO().WantCaptureMouse;
-  int rainbowAnimationInt = rainbowAnimation;
-  int drawRainbowInt = drawRainbow;
+  int     rainbowAnimationInt = rainbowAnimation;
+  int     drawRainbowInt = (IsMouseButtonDown(1)) ? 0 : drawRainbow;
   Vector4 color;
 
   if (user.mode == DRAWING)
     color = (IsMouseButtonDown(1)) ? Vector4{1.0, 1.0, 1.0, 1.0} : Vector4{0.0, 0.0, 0.0, 1.0};
   else // user.mode == LIGHTING
     color = (IsMouseButtonDown(1)) ? Vector4{0.0, 0.0, 0.0, 1.0} : ColorNormalize(user.brushColor);
-
-  // color = Vector4{1.0, 1.0, 1.0, 1.0};
 
   // -------------------------------- scene mapping
 
@@ -279,83 +296,11 @@ void Demo::renderUI() {
 
   if (skipUIRendering) return;
 
-  float h = 400;
   if (debug) {
-    h += 180;
-    if (debugShowBuffers) h += 60*4;
-  }
-  ImGui::SetNextWindowSize(ImVec2{250, h});
-  ImGui::SetNextWindowPos(ImVec2{4, 4});
-
-  if (!ImGui::Begin("Mode", &debugWindowData.open, debugWindowData.flags)) {
+  if (!ImGui::Begin("Debug", &debugWindowData.open, debugWindowData.flags)) {
     ImGui::End();
   } else {
-    if (ImGui::SmallButton("set r(a)ndom colour")) userSetRandomColor();
-    Vector4 col4 = ColorNormalize(user.brushColor);
-    float col[3] = { col4.x, col4.y, col4.z };
-    ImGui::ColorEdit3("light color", col);
-    user.brushColor = ColorFromNormalized(Vector4{col[0], col[1], col[2], 1.0});
-
-    ImGui::SeparatorText("Scenes");
-
-    if (ImGui::SmallButton("(c)lear")) setScene(CLEAR);
-    ImGui::SameLine();
-    if (ImGui::SmallButton("maze")) setScene(MAZE);
-    ImGui::SameLine();
-    if (ImGui::SmallButton("trees")) setScene(TREES);
-
-    if (ImGui::SmallButton("penumbra")) setScene(PENUMBRA);
-    ImGui::SameLine();
-    if (ImGui::SmallButton("penumbra2")) setScene(PENUMBRA2);
-
-    ImGui::SeparatorText("Lighting");
-
-    ImGui::Checkbox("trad. gi", &gi);
-    ImGui::SameLine();
-    bool tmp = !gi;
-    ImGui::Checkbox("radiance cascades", &tmp);
-    gi = !tmp;
-
-    ImGui::Checkbox("light orb circle", &orbs);
-    ImGui::Checkbox("sRGB conversion", &srgb);
-    ImGui::Checkbox("draw rainbow", &drawRainbow);
-    ImGui::Checkbox("rainbow animation", &rainbowAnimation);
-    ImGui::SliderFloat("##mix factor",   &giMixFactor, 0.0, 1.0, "mix factor = %f");
-    ImGui::SliderFloat("##decay rate",   &giDecayRate, 0.0, 2.0, "decay rate = %f");
-
-    if (gi) {
-      ImGui::SeparatorText("traditional gi");
-      ImGui::SliderInt("##rays per px",   &giRayCount, 0, 512, "ray count = %i");
-      ImGui::Checkbox("noise", &giNoise);
-    } else {
-      ImGui::SeparatorText("radiance cascades");
-
-      auto setParams = [this](int n){
-        rcRayCount = pow(4, n);
-      };
-
-      ImGui::Text("branching factor");
-      if (ImGui::SmallButton("1"))
-        setParams(1);
-      ImGui::SameLine();
-      if (ImGui::SmallButton("2"))
-        setParams(2);
-      ImGui::SameLine();
-      if (ImGui::SmallButton("3"))
-        setParams(3);
-      ImGui::SliderInt("##rays per px",   &rcRayCount, 0, 64,  "base ray count = %i");
-      // ImGui::SliderInt("##rays per px",   &rcRayCount, 0, 64,  "top cascade probe amount = %i");
-      ImGui::SliderInt("##cascade amount",   &cascadeAmount, 0, 32, "cascade amount = %i");
-      ImGui::SliderInt("##cascade display",   &cascadeDisplayIndex, 0, cascadeAmount-1, "display cascade = %i");
-      ImGui::SliderFloat("##base interval",   &baseInterval, 0, 64.0, "base interval = %fpx");
-      ImGui::Checkbox("bilinear interpolation", &rcBilinear);
-      ImGui::Checkbox("disable merging", &rcDisableMerging);
-    }
-
-    if (debug) {
-      ImGui::SeparatorText("Debug");
       ImGui::Text("%d FPS", GetFPS());
-
       if (ImGui::SmallButton("show buffers")) debugShowBuffers = !debugShowBuffers;
       if (debugShowBuffers) {
         if (ImGui::BeginTable("buffer_table", 2)) {
@@ -383,12 +328,85 @@ void Demo::renderUI() {
           ImGui::EndTable();
         }
       }
-      ImGui::SeparatorText("Build Info");
       std::string str = "built ";
       str += __DATE__;
       str += " at ";
       str += __TIME__;
       ImGui::Text(str.c_str());
+      ImGui::End();
+    }
+  }
+
+  if (!ImGui::Begin("Scene Settings", &sceneWindowData.open, sceneWindowData.flags)) {
+    ImGui::End();
+  } else {
+    if (ImGui::SmallButton("(c)lear")) setScene(CLEAR);
+    ImGui::SameLine();
+    if (ImGui::SmallButton("maze")) setScene(MAZE);
+    ImGui::SameLine();
+    if (ImGui::SmallButton("trees")) setScene(TREES);
+
+    if (ImGui::SmallButton("penumbra")) setScene(PENUMBRA);
+    ImGui::SameLine();
+    if (ImGui::SmallButton("penumbra2")) setScene(PENUMBRA2);
+
+    ImGui::SeparatorText("Lighting");
+
+    ImGui::Checkbox("light orb circle", &orbs);
+    ImGui::Checkbox("sRGB conversion", &srgb);
+    ImGui::SliderFloat("##mix factor",   &giMixFactor, 0.0, 1.0, "mix factor = %f");
+    ImGui::SliderFloat("##decay rate",   &giDecayRate, 0.0, 2.0, "decay rate = %f");
+    ImGui::End();
+  }
+
+  if (!ImGui::Begin("Color Picker", &colorWindowData.open, colorWindowData.flags)) {
+    ImGui::End();
+  } else {
+    if (ImGui::SmallButton("set r(a)ndom colour")) userSetRandomColor();
+    Vector4 col4 = ColorNormalize(user.brushColor);
+    float col[3] = { col4.x, col4.y, col4.z };
+    ImGui::ColorPicker3("##light color", col);
+    user.brushColor = ColorFromNormalized(Vector4{col[0], col[1], col[2], 1.0});
+    ImGui::Checkbox("draw rainbow", &drawRainbow);
+    ImGui::Checkbox("rainbow animation", &rainbowAnimation);
+    ImGui::End();
+  }
+
+  if (!ImGui::Begin("Lighting Settings", &lightingWindowData.open, lightingWindowData.flags)) {
+    ImGui::End();
+  } else {
+    if (gi) {
+      ImGui::Checkbox("trad. gi", &gi);
+      ImGui::SameLine();
+      bool tmp = !gi;
+      ImGui::Checkbox("radiance cascades", &tmp);
+      gi = !tmp;
+
+      ImGui::SeparatorText("traditional gi");
+      ImGui::SliderInt("##rays per px",   &giRayCount, 0, 512, "ray count = %i");
+      ImGui::Checkbox("noise", &giNoise);
+    } else {
+      ImGui::SeparatorText("radiance cascades");
+
+      auto setParams = [this](int n){
+        rcRayCount = pow(4, n);
+      };
+
+      ImGui::Text("branching factor");
+      if (ImGui::SmallButton("1"))
+        setParams(1);
+      ImGui::SameLine();
+      if (ImGui::SmallButton("2"))
+        setParams(2);
+      ImGui::SameLine();
+      if (ImGui::SmallButton("3"))
+        setParams(3);
+      ImGui::SliderInt("##rays per px",         &rcRayCount, 0, 64,  "base ray count = %i");
+      ImGui::SliderInt("##cascade amount",      &cascadeAmount, 0, 32, "cascade amount = %i");
+      ImGui::SliderInt("##cascade display",     &cascadeDisplayIndex, 0, cascadeAmount-1, "display cascade = %i");
+      ImGui::SliderFloat("##base interval",     &baseInterval, 0, 64.0, "base interval = %fpx");
+      ImGui::Checkbox("bilinear interpolation", &rcBilinear);
+      ImGui::Checkbox("disable merging",        &rcDisableMerging);
     }
     ImGui::End();
   }
@@ -414,12 +432,19 @@ void Demo::processKeyboardInput() {
   // if (IsKeyPressed(KEY_F12)) ToggleFullscreen();
 
   if (IsKeyPressed(KEY_C)) setScene(CLEAR);
+  if (IsKeyPressed(KEY_S)) {
+    if (IsKeyDown(KEY_LEFT_CONTROL)) {
+      ImGui::SaveIniSettingsToDisk("imgui.ini");
+    }
+  }
   if (IsKeyPressed(KEY_R)) {
     if (IsKeyDown(KEY_LEFT_CONTROL)) {
       std::cout << "Reloading shaders." << std::endl;
       for (auto const& [key, val] : shaders) {
         loadShader(key);
       }
+    } else if (IsKeyDown(KEY_LEFT_SHIFT)) {
+      ImGui::LoadIniSettingsFromDisk("imgui.ini");
     } else {
       setScene(CLEAR);
     }
@@ -502,7 +527,6 @@ void Demo::setBuffers() {
 
   BeginTextureMode(occlusionBuf);
     ClearBackground(WHITE);
-    // DrawTexture(occlusionTexture, 0, 0, WHITE);
     DrawTexturePro(occlusionTexture, Rectangle{0, 0, occlusionTexture.width, occlusionTexture.height}, Rectangle{0, 0, GetScreenWidth(), GetScreenHeight()}, Vector2{0, 0}, 0.0, WHITE);
   EndTextureMode();
 

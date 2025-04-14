@@ -13,6 +13,8 @@
 struct WindowData {
   ImGuiWindowFlags flags = 0;
   bool open              = true;
+  ImVec2 pos;
+  ImVec2 size;
 };
 
 enum Mode {
@@ -81,8 +83,11 @@ class Demo {
 
     bool skipUIRendering;
     bool debugShowBuffers;
-    WindowData debugWindowData;
     Vector2 lastMousePos;
+    WindowData debugWindowData;
+    WindowData sceneWindowData;
+    WindowData colorWindowData;
+    WindowData lightingWindowData;
     bool help;
 
     // RESOURCES
