@@ -22,10 +22,10 @@ int main() {
   int screenHeight = GetScreenHeight();
   while (!WindowShouldClose())
   {
+    demo.processMouseInput();
     demo.processKeyboardInput();
     demo.update();
     BeginDrawing();
-      demo.processMouseInput();
       demo.render();
       rlImGuiBegin();
         demo.renderUI();

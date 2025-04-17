@@ -20,6 +20,21 @@ uniform float uMixFactor;
 
 /* this shader performs "radiosity-based GI" - see comments */
 
+// sourced from https://gist.github.com/Reedbeta/e8d3817e3f64bba7104b8fafd62906dfj
+vec3 lin_to_srgb(vec3 rgb)
+{
+  return mix(1.055 * pow(rgb, vec3(1.0 / 2.4)) - 0.055,
+             rgb * 12.92,
+             lessThanEqual(rgb, vec3(0.0031308)));
+}
+
+vec3 srgb_to_lin(vec3 rgb)
+{
+  return mix(pow((rgb + 0.055) * (1.0 / 1.055), vec3(2.4)),
+             rgb * (1.0/12.92),
+             lessThanEqual(rgb, vec3(0.04045)));
+}
+
 vec4 raymarch(vec2 uv, vec2 dir) {
   /*
    * Raymarching entails iteratively stepping a ray by a certain amount using a distance field. We recursively
@@ -44,9 +59,10 @@ vec4 raymarch(vec2 uv, vec2 dir) {
           texture(uSceneMap,  uv).rgb,
           max(
             // we pick the maximum of either the last frame at `uv` or at the pixel right before `uv`
-            // this is also where we can define the decay rate of the indirect lighting
-            texture(uLastFrame, vec2(uv.x, -uv.y)).rgb,
-            texture(uLastFrame, vec2(uv.x, -uv.y) - (dir * (1.0/uResolution))).rgb * uDecayRate
+            // the picked texture is then multiplied by the decay rate so that lighting is not infinitely added
+            // we also need to convert the texture from sRGB to linear colour space
+            srgb_to_lin(texture(uLastFrame, vec2(uv.x, -uv.y)).rgb),
+            srgb_to_lin(texture(uLastFrame, vec2(uv.x, -uv.y) - (dir * (1.0/uResolution))).rgb) * uDecayRate
           ),
           uMixFactor
         ), 1.0);
@@ -70,17 +86,6 @@ float noise(vec2 p){
 	return res*res;
 }
 
-vec3 lin_to_srgb(vec3 color)
-{
-   vec3 x = color.rgb * 12.92;
-   vec3 y = 1.055 * pow(clamp(color.rgb, 0.0, 1.0), vec3(0.4166667)) - 0.055;
-   vec3 clr = color.rgb;
-   clr.r = (color.r < 0.0031308) ? x.r : y.r;
-   clr.g = (color.g < 0.0031308) ? x.g : y.g;
-   clr.b = (color.b < 0.0031308) ? x.b : y.b;
-   return clr.rgb;
-}
-
 void main() {
  /*
   * To calculate the radiance value of a pixel we cast `uRaysPerPx` amount of rays in all directions
@@ -89,16 +94,14 @@ void main() {
   vec2 fragCoord = gl_FragCoord.xy/uResolution;
 
   float dist = texture(uDistanceField, fragCoord).r;
-  float noise = noise(fragCoord.xy * 2000);
+  float n = 0.0; // noise
+  if (uNoise == 1) n = noise(fragCoord.xy * 2000);
   vec4 radiance = texture(uSceneMap, fragCoord);
 
   if (dist >= EPS) { // if we're not already in a wall
     // cast rays angularly with equal angles between them
     for (float i = 0.0; i < TWO_PI; i += TWO_PI / uRaysPerPx) {
-      float angle = i;
-      if (uNoise == 1) {
-        angle += noise;
-      }
+      float angle = i + n;
       vec4 hitcol = raymarch(fragCoord, vec2(cos(angle) * uResolution.y/uResolution.x, sin(angle)));
       radiance += hitcol;
     }

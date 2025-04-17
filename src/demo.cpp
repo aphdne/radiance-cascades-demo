@@ -1,20 +1,23 @@
 #include "demo.h"
 
 Demo::Demo() {
+
   // --- MISC PARAMETERS
-  maxRaySteps = 64;
-  jfaSteps = 128;
+  maxRaySteps = 128;
+  jfaSteps = 512;
+  selectedScene = -1;
 
   orbs = false;
-  srgb = false;
+  mouseLight = true;
+  srgb = true;
   drawRainbow = false;
   rainbowAnimation = false;
 
   gi = false;
   giRayCount = 64;
   giNoise = true;
-  giMixFactor = 0.7;
-  giDecayRate = 1.3;
+  mixFactor = 0.7;
+  decayRate = 1.3;
 
   rcRayCount = 4;
   cascadeAmount = 5;
@@ -31,39 +34,35 @@ Demo::Demo() {
   debugShowBuffers = false;
   debug = false;
   help  = true;
+  displayNumber = 0;
+  displayBuffer = &lastFrameBuf;
 
-  // debugWindowData.flags |= ImGuiWindowFlags_NoTitleBar;
-  // debugWindowData.flags |= ImGuiWindowFlags_NoScrollbar;
-  // debugWindowData.flags |= ImGuiWindowFlags_NoMove;
   debugWindowData.flags |= ImGuiWindowFlags_NoResize;
-  // debugWindowData.flags |= ImGuiWindowFlags_NoCollapse;
   debugWindowData.flags |= ImGuiWindowFlags_NoBackground;
-  // debugWindowData.flags |= ImGuiWindowFlags_NoNav;
-  debugWindowData.size = ImVec2{250, 400};
-  debugWindowData.pos  = ImVec2{4, 4};
 
   sceneWindowData.flags |= ImGuiWindowFlags_NoScrollbar;
   sceneWindowData.flags |= ImGuiWindowFlags_NoResize;
   sceneWindowData.flags |= ImGuiWindowFlags_NoBackground;
-  sceneWindowData.size = ImVec2{200, 260};
 
   colorWindowData.flags |= ImGuiWindowFlags_NoScrollbar;
   colorWindowData.flags |= ImGuiWindowFlags_NoResize;
   colorWindowData.flags |= ImGuiWindowFlags_NoBackground;
-  colorWindowData.size = ImVec2{180, 260};
 
   lightingWindowData.flags |= ImGuiWindowFlags_NoScrollbar;
   lightingWindowData.flags |= ImGuiWindowFlags_NoResize;
   lightingWindowData.flags |= ImGuiWindowFlags_NoBackground;
-  lightingWindowData.size = ImVec2{200, 260};
+
+  helpWindowData.flags |= ImGuiWindowFlags_NoScrollbar;
+  helpWindowData.flags |= ImGuiWindowFlags_NoResize;
+  // helpWindowData.flags |= ImGuiWindowFlags_NoBackground;
+  helpWindowData.flags |= ImGuiWindowFlags_NoInputs;
+  helpWindowData.flags |= ImGuiWindowFlags_NoTitleBar;
 
   ImGui::GetIO().IniFilename = NULL;
   ImGui::LoadIniSettingsFromDisk("imgui.ini");
   HideCursor();
 
   // --- LOAD RESOURCES
-
-  lastMousePos = {0, 0};
 
   cursorTex = LoadTexture("res/textures/cursor.png");
 
@@ -124,7 +123,6 @@ void Demo::render() {
     BeginShaderMode(drawShader);
       SetShaderValue(drawShader, GetShaderLocation(drawShader, "uTime"),         &time,           SHADER_UNIFORM_FLOAT);
       SetShaderValue(drawShader, GetShaderLocation(drawShader, "uMousePos"),     &mousePos,       SHADER_UNIFORM_VEC2);
-      SetShaderValue(drawShader, GetShaderLocation(drawShader, "uLastMousePos"), &lastMousePos,   SHADER_UNIFORM_VEC2);
       SetShaderValue(drawShader, GetShaderLocation(drawShader, "uBrushSize"),    &user.brushSize, SHADER_UNIFORM_FLOAT);
       SetShaderValue(drawShader, GetShaderLocation(drawShader, "uBrushColor"),   &color,          SHADER_UNIFORM_VEC4);
       SetShaderValue(drawShader, GetShaderLocation(drawShader, "uResolution"),   &resolution,     SHADER_UNIFORM_VEC2);
@@ -139,10 +137,15 @@ void Demo::render() {
   BeginTextureMode(sceneBuf);
     ClearBackground(BLANK);
     BeginShaderMode(scenePrepShader);
+      color = (user.mode == DRAWING) ? Vector4{0.0, 0.0, 0.0, 1.0} : ColorNormalize(user.brushColor);
       int orbsInt = orbs;
+      int mouseLightInt = mouseLight && !ImGui::GetIO().WantCaptureMouse;
       SetShaderValueTexture(scenePrepShader, GetShaderLocation(scenePrepShader, "uOcclusionMap"),    occlusionBuf.texture);
       SetShaderValueTexture(scenePrepShader, GetShaderLocation(scenePrepShader, "uEmissionMap"),     emissionBuf.texture);
       SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uMousePos"),   &mousePos,            SHADER_UNIFORM_VEC2);
+      SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uBrushSize"),  &user.brushSize,      SHADER_UNIFORM_FLOAT);
+      SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uBrushColor"), &color,               SHADER_UNIFORM_VEC4);
+      SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uMouseLight"), &mouseLightInt,       SHADER_UNIFORM_INT);
       SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uResolution"), &resolution,          SHADER_UNIFORM_VEC2);
       SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uTime"),       &time,                SHADER_UNIFORM_FLOAT);
       SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uOrbs"),       &orbsInt,             SHADER_UNIFORM_INT);
@@ -155,7 +158,7 @@ void Demo::render() {
 
   // first render pass for JFA
   // create UV mask w/ prep shader
-  BeginTextureMode(bufferA);
+  BeginTextureMode(jfaBufferA);
     ClearBackground(BLANK);
     BeginShaderMode(prepJfaShader);
       SetShaderValueTexture(prepJfaShader, GetShaderLocation(prepJfaShader, "uSceneMap"), sceneBuf.texture);
@@ -164,18 +167,18 @@ void Demo::render() {
     EndShaderMode();
   EndTextureMode();
 
-  // // ping-pong buffering
-  // // alternate between two buffers so that we can implement a recursive shader
-  // // see https://mini.gmshaders.com/p/gm-shaders-mini-recursive-shaders-1308459
+  // ping-pong buffering
+  // alternate between two buffers so that we can implement a recursive shader
+  // see https://mini.gmshaders.com/p/gm-shaders-mini-recursive-shaders-1308459
   for (int j = jfaSteps*2; j >= 1; j /= 2) {
-    bufferC = bufferA;
-    bufferA = bufferB;
-    bufferB = bufferC;
+    jfaBufferC = jfaBufferA;
+    jfaBufferA = jfaBufferB;
+    jfaBufferB = jfaBufferC;
 
-    BeginTextureMode(bufferA);
+    BeginTextureMode(jfaBufferA);
       ClearBackground(BLANK);
       BeginShaderMode(jfaShader);
-        SetShaderValueTexture(jfaShader, GetShaderLocation(jfaShader, "uCanvas"), bufferB.texture);
+        SetShaderValueTexture(jfaShader, GetShaderLocation(jfaShader, "uCanvas"), jfaBufferB.texture);
         SetShaderValue(jfaShader, GetShaderLocation(jfaShader, "uJumpSize"), &j, SHADER_UNIFORM_INT);
         SetShaderValue(jfaShader, GetShaderLocation(jfaShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
         DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
@@ -188,7 +191,7 @@ void Demo::render() {
   BeginTextureMode(distFieldBuf);
     ClearBackground(BLANK);
     BeginShaderMode(distFieldShader);
-      SetShaderValueTexture(distFieldShader, GetShaderLocation(distFieldShader, "uJFA"), bufferA.texture);
+      SetShaderValueTexture(distFieldShader, GetShaderLocation(distFieldShader, "uJFA"), jfaBufferA.texture);
       SetShaderValue(distFieldShader, GetShaderLocation(distFieldShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
       DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
     EndShaderMode();
@@ -213,8 +216,8 @@ void Demo::render() {
         SetShaderValue(giShader, GetShaderLocation(giShader, "uMaxSteps"),   &maxRaySteps, SHADER_UNIFORM_INT);
         SetShaderValue(giShader, GetShaderLocation(giShader, "uSrgb"),       &srgbInt,     SHADER_UNIFORM_INT);
         SetShaderValue(giShader, GetShaderLocation(giShader, "uNoise"),      &giNoiseInt,  SHADER_UNIFORM_INT);
-        SetShaderValue(giShader, GetShaderLocation(giShader, "uDecayRate"),  &giDecayRate, SHADER_UNIFORM_FLOAT);
-        SetShaderValue(giShader, GetShaderLocation(giShader, "uMixFactor"),  &giMixFactor, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(giShader, GetShaderLocation(giShader, "uDecayRate"),  &decayRate, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(giShader, GetShaderLocation(giShader, "uMixFactor"),  &mixFactor, SHADER_UNIFORM_FLOAT);
         DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
       EndShaderMode();
     EndTextureMode();
@@ -222,23 +225,66 @@ void Demo::render() {
 
   // --------------- radiance cascades
 
-    int rcDisableMergingInt = rcDisableMerging;
+    if (rcBilinear) {
+      SetTextureFilter(radianceBufferA.texture, TEXTURE_FILTER_BILINEAR);
+      SetTextureFilter(radianceBufferB.texture, TEXTURE_FILTER_BILINEAR);
+      SetTextureFilter(radianceBufferC.texture, TEXTURE_FILTER_BILINEAR);
+    } else {
+      SetTextureFilter(radianceBufferA.texture, TEXTURE_FILTER_POINT);
+      SetTextureFilter(radianceBufferB.texture, TEXTURE_FILTER_POINT);
+      SetTextureFilter(radianceBufferC.texture, TEXTURE_FILTER_POINT);
+    }
+
+  // --------------- direct lighting pass
+    int directDisplayIndex = 0;
+    srgbInt = 0;
+    int uMixFactor = 0;
+    int rcDisableMergingInt = 0;
     for (int i = cascadeAmount; i >= 0; i--) {
       radianceBufferC = radianceBufferA;
       radianceBufferA = radianceBufferB;
       radianceBufferB = radianceBufferC;
 
-      if (rcBilinear)
-        SetTextureFilter(radianceBufferC.texture, TEXTURE_FILTER_BILINEAR);
-      else
-        SetTextureFilter(radianceBufferC.texture, TEXTURE_FILTER_POINT);
+      BeginTextureMode(radianceBufferA);
+        BeginShaderMode(rcShader);
+          ClearBackground(BLANK);
+          SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uDistanceField"),  distFieldBuf.texture);
+          SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uSceneMap"),       sceneBuf.texture);
+          SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uLastPass"),       radianceBufferC.texture);
+          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uResolution"),          &resolution,          SHADER_UNIFORM_VEC2);
+          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uBaseRayCount"),        &rcRayCount,          SHADER_UNIFORM_INT);
+          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uMaxSteps"),            &maxRaySteps,         SHADER_UNIFORM_INT);
+          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uBaseInterval"),        &baseInterval,        SHADER_UNIFORM_FLOAT);
+          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uDisableMerging"),      &rcDisableMergingInt, SHADER_UNIFORM_INT);
+          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uCascadeDisplayIndex"), &directDisplayIndex,  SHADER_UNIFORM_INT);
+          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uCascadeIndex"),        &i,                   SHADER_UNIFORM_INT);
+          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uCascadeAmount"),       &cascadeAmount,       SHADER_UNIFORM_INT);
+          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uSrgb"),                &srgbInt,             SHADER_UNIFORM_INT);
+          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uMixFactor"),           &uMixFactor,          SHADER_UNIFORM_FLOAT);
+          DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
+        EndShaderMode();
+      EndTextureMode();
+    }
+
+    BeginTextureMode(lastFrameBuf);
+      DrawTextureRec(radianceBufferA.texture, {0, 0.0, (float)GetScreenWidth(), (float)GetScreenHeight()}, {0.0, 0.0}, WHITE);
+    EndTextureMode();
+
+  // --------------- indirect lighting pass (one bounce)
+    rcDisableMergingInt = rcDisableMerging;
+    srgbInt = srgb;
+    for (int i = cascadeAmount; i >= 0; i--) {
+      radianceBufferC = radianceBufferA;
+      radianceBufferA = radianceBufferB;
+      radianceBufferB = radianceBufferC;
 
       BeginTextureMode(radianceBufferA);
         BeginShaderMode(rcShader);
           ClearBackground(BLANK);
-          SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uDistanceField"), distFieldBuf.texture);
-          SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uSceneMap"),      sceneBuf.texture);
-          SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uLastPass"),      radianceBufferC.texture);
+          SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uDistanceField"),  distFieldBuf.texture);
+          SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uSceneMap"),       sceneBuf.texture);
+          SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uDirectLighting"), lastFrameBuf.texture);
+          SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uLastPass"),       radianceBufferC.texture);
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uResolution"),          &resolution,          SHADER_UNIFORM_VEC2);
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uBaseRayCount"),        &rcRayCount,          SHADER_UNIFORM_INT);
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uMaxSteps"),            &maxRaySteps,         SHADER_UNIFORM_INT);
@@ -248,7 +294,8 @@ void Demo::render() {
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uCascadeIndex"),        &i,                   SHADER_UNIFORM_INT);
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uCascadeAmount"),       &cascadeAmount,       SHADER_UNIFORM_INT);
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uSrgb"),                &srgbInt,             SHADER_UNIFORM_INT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uDecayRate"),           &giDecayRate,         SHADER_UNIFORM_FLOAT);
+          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uDecayRate"),           &decayRate,         SHADER_UNIFORM_FLOAT);
+          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uMixFactor"),           &mixFactor, SHADER_UNIFORM_FLOAT);
           DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
         EndShaderMode();
       EndTextureMode();
@@ -264,24 +311,25 @@ void Demo::render() {
   EndTextureMode();
 
   BeginShaderMode(finalShader);
-    SetShaderValueTexture(finalShader, GetShaderLocation(finalShader, "uCanvas"), lastFrameBuf.texture); //(srgb) ? occlusionBuf.texture : emissionBuf.texture);
+    SetShaderValueTexture(finalShader, GetShaderLocation(finalShader, "uCanvas"), lastFrameBuf.texture);
     SetShaderValue(finalShader, GetShaderLocation(finalShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
   EndShaderMode();
 
-  // if (!skipUIRendering) {
+  if (!mouseLight) {
     DrawTextureEx(user.brushTexture,
                   Vector2{ (float)(GetMouseX() - user.brushTexture.width  / 2 * user.brushSize),
                            (float)(GetMouseY() - user.brushTexture.height / 2 * user.brushSize) },
                   0.0,
                   user.brushSize,
                   Color{ 0, 0, 0, 128} );
-  // }
+  }
 }
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 void Demo::renderUI() {
+  // ImGui::ShowDemoWindow();
   // dont draw our custom cursor if we are mousing over the UI
   ImGuiIO& io = ImGui::GetIO();
   if (!io.WantCaptureMouse) {
@@ -296,38 +344,33 @@ void Demo::renderUI() {
 
   if (skipUIRendering) return;
 
+  // -------------------------------- debug window
+
+  // --------------- traditional GI
+
   if (debug) {
   if (!ImGui::Begin("Debug", &debugWindowData.open, debugWindowData.flags)) {
     ImGui::End();
   } else {
-      ImGui::Text("%d FPS", GetFPS());
-      if (ImGui::SmallButton("show buffers")) debugShowBuffers = !debugShowBuffers;
-      if (debugShowBuffers) {
-        if (ImGui::BeginTable("buffer_table", 2)) {
-          ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            rlImGuiImageSizeV(&occlusionBuf.texture,      {80, 60});
-            ImGui::TableSetColumnIndex(1);
-            rlImGuiImageSizeV(&emissionBuf.texture,     {80, 60});
-          ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            rlImGuiImageSizeV(&sceneBuf.texture,     {80, 60});
-          ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            rlImGuiImageSizeV(&bufferA.texture,      {80, 60});
-            ImGui::TableSetColumnIndex(1);
-            rlImGuiImageSizeV(&distFieldBuf.texture, {80, 60});
-          ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            rlImGuiImageSizeV(&radianceBufferA.texture,      {80, 60});
-            ImGui::TableSetColumnIndex(1);
-            rlImGuiImageSizeV(&radianceBufferB.texture,      {80, 60});
-          ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            rlImGuiImageSizeV(&radianceBufferC.texture,      {80, 60});
-          ImGui::EndTable();
+      if (ImGui::SliderInt("##display stage",   &displayNumber, 0, 3, "display stage = %i")) {
+        switch (displayNumber) {
+          case 0:
+            displayBuffer = &sceneBuf;
+            break;
+          case 1:
+            displayBuffer = &jfaBufferA;
+            break;
+          case 2:
+            displayBuffer = &distFieldBuf;
+            break;
+          case 3:
+            displayBuffer = &lastFrameBuf;
+            break;
         }
       }
+      Vector2 displaySize = {80.0, 80.0*(std::min((float)GetScreenWidth(), (float)GetScreenHeight()) / std::max((float)GetScreenWidth(), (float)GetScreenHeight()))};
+      rlImGuiImageSizeV(&displayBuffer->texture, displaySize);
+
       std::string str = "built ";
       str += __DATE__;
       str += " at ";
@@ -337,27 +380,40 @@ void Demo::renderUI() {
     }
   }
 
+  // -------------------------------- scene window
+
   if (!ImGui::Begin("Scene Settings", &sceneWindowData.open, sceneWindowData.flags)) {
     ImGui::End();
   } else {
-    if (ImGui::SmallButton("(c)lear")) setScene(CLEAR);
-    ImGui::SameLine();
-    if (ImGui::SmallButton("maze")) setScene(MAZE);
-    ImGui::SameLine();
-    if (ImGui::SmallButton("trees")) setScene(TREES);
+      ImGui::Text("average frame time\n%f ms (%d fps)", GetFPS(), GetFrameTime());
 
-    if (ImGui::SmallButton("penumbra")) setScene(PENUMBRA);
-    ImGui::SameLine();
-    if (ImGui::SmallButton("penumbra2")) setScene(PENUMBRA2);
+      static bool toggles[] = { true, false, false, false };
+      const char* names[] = { "maze", "trees", "penumbra", "penumbra 2"};
 
-    ImGui::SeparatorText("Lighting");
+      // Simple selection popup (if you want to show the current selection inside the Button itself,
+      // you may want to build a string using the "###" operator to preserve a constant ID with a variable label)
+      if (ImGui::Button("select scene"))
+          ImGui::OpenPopup("scene_select");
+      ImGui::SameLine();
+      ImGui::TextUnformatted(selectedScene == -1 ? "<None>" : names[selectedScene]);
+      if (ImGui::BeginPopup("scene_select")) {
+        for (int i = 0; i < IM_ARRAYSIZE(names); i++) {
+          if (ImGui::Selectable(names[i])) {
+            selectedScene = i;
+            setScene(selectedScene);
+          }
+        }
+        ImGui::EndPopup();
+      }
 
+    ImGui::Checkbox("mouse light", &mouseLight);
+    ImGui::SetItemTooltip("draws an occluder/emitter on mouse position");
     ImGui::Checkbox("light orb circle", &orbs);
-    ImGui::Checkbox("sRGB conversion", &srgb);
-    ImGui::SliderFloat("##mix factor",   &giMixFactor, 0.0, 1.0, "mix factor = %f");
-    ImGui::SliderFloat("##decay rate",   &giDecayRate, 0.0, 2.0, "decay rate = %f");
+    ImGui::SetItemTooltip("draws some animated circles to light up the scene");
     ImGui::End();
   }
+
+  // -------------------------------- colour picker window
 
   if (!ImGui::Begin("Color Picker", &colorWindowData.open, colorWindowData.flags)) {
     ImGui::End();
@@ -372,19 +428,36 @@ void Demo::renderUI() {
     ImGui::End();
   }
 
+  // -------------------------------- lighting settings window
+
   if (!ImGui::Begin("Lighting Settings", &lightingWindowData.open, lightingWindowData.flags)) {
     ImGui::End();
   } else {
-    if (gi) {
-      ImGui::Checkbox("trad. gi", &gi);
-      ImGui::SameLine();
-      bool tmp = !gi;
-      ImGui::Checkbox("radiance cascades", &tmp);
-      gi = !tmp;
+    int giInt = gi;
+    ImGui::RadioButton("radiance cascades", &giInt, 0);
+    ImGui::RadioButton("ray tracing", &giInt, 1);
+    gi = giInt;
 
+    ImGui::SeparatorText("general settings");
+
+    ImGui::SetNextItemWidth(ImGui::GetFontSize() * 5);
+    ImGui::SliderFloat("mix factor", &mixFactor, 0.0, 1.0, "%.2f");
+    ImGui::SetItemTooltip("percentage: how much the original scene texture\nshould be mixed with the direct lighting pass");
+
+    ImGui::SetNextItemWidth(ImGui::GetFontSize() * 5);
+    ImGui::SliderFloat("propagation", &decayRate, 0.0, 2.0, "%.2f");
+    ImGui::SetItemTooltip("how much the indirect lighting should be propagated");
+
+    ImGui::Checkbox("sRGB conversion", &srgb);
+    ImGui::SetItemTooltip("conversion from linear colour space to \nsRGB colour space; sRGB skews certain \ncolour values so that colours appear more\nnaturally to the human eye");
+
+    if (gi) {
       ImGui::SeparatorText("traditional gi");
-      ImGui::SliderInt("##rays per px",   &giRayCount, 0, 512, "ray count = %i");
       ImGui::Checkbox("noise", &giNoise);
+      ImGui::SetItemTooltip("mixes noise into the lighting calculation\nso that a lower ray count can be used\nin exchange for a more noisy output");
+      ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
+      ImGui::SliderInt("ray count", &giRayCount, 0, 512, "%i");
+      ImGui::SetItemTooltip("amount of rays cast per pixel");
     } else {
       ImGui::SeparatorText("radiance cascades");
 
@@ -392,24 +465,40 @@ void Demo::renderUI() {
         rcRayCount = pow(4, n);
       };
 
-      ImGui::Text("branching factor");
-      if (ImGui::SmallButton("1"))
-        setParams(1);
-      ImGui::SameLine();
-      if (ImGui::SmallButton("2"))
-        setParams(2);
-      ImGui::SameLine();
-      if (ImGui::SmallButton("3"))
-        setParams(3);
-      ImGui::SliderInt("##rays per px",         &rcRayCount, 0, 64,  "base ray count = %i");
-      ImGui::SliderInt("##cascade amount",      &cascadeAmount, 0, 32, "cascade amount = %i");
-      ImGui::SliderInt("##cascade display",     &cascadeDisplayIndex, 0, cascadeAmount-1, "display cascade = %i");
-      ImGui::SliderFloat("##base interval",     &baseInterval, 0, 64.0, "base interval = %fpx");
+      ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
+      ImGui::SliderInt("display cascade",     &cascadeDisplayIndex, 0, cascadeAmount-1, "%i");
+      ImGui::SetItemTooltip("cascade to display; seeing cascades\nindividually can help build intuition\nover how the algorithm works");
+      ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
+      ImGui::SliderFloat("base interval size",     &baseInterval, 0, 64.0, "%.2fpx");
+      ImGui::SetItemTooltip("radiance interval is used to segment rays\nthe base interval is for the first casacade\nand is exponentiated per cascade\ne.g. 1px, 2px, 4px, 16px, 64px...");
       ImGui::Checkbox("bilinear interpolation", &rcBilinear);
+      ImGui::SetItemTooltip("as higher cascades have higher segments (probes)\ntheir output will be pixelated. interpolating\nthese outputs makes them feasible\nas a lighting solution");
       ImGui::Checkbox("disable merging",        &rcDisableMerging);
+      ImGui::SetItemTooltip("each cascade is merged (cascaded) with\nthe cascade above it to form the\nfinal lighting solution");
     }
     ImGui::End();
   }
+
+  // -------------------------------- info window
+
+  float w = 200;
+  ImGui::SetNextWindowSize(ImVec2{w, 350});
+  ImGui::SetNextWindowPos(ImVec2{GetScreenWidth() - w - 4, 0});
+
+  ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.5);
+  if (!ImGui::Begin("Help Text", &helpWindowData.open, helpWindowData.flags)) {
+    ImGui::End();
+  } else {
+    ImGui::TextWrapped("radiance cascades are a novel lighting data structure for real-time global illumination\n");
+    ImGui::TextWrapped("feel free to change some of the lighting settings; check out the traditional lighting algorithm & observe the differences! build some intuition over what's happening with radiance cascades.");
+    ImGui::SeparatorText("controls");
+    ImGui::BulletText("left mouse to draw\n");
+    ImGui::BulletText("right mouse to erase\n");
+    ImGui::BulletText("1 & 2 to switch to \ndrawing/erasing light \noccluders or emitters\n");
+    ImGui::End();
+  }
+  ImGui::PopStyleVar();
+
 }
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -431,7 +520,7 @@ void Demo::processKeyboardInput() {
   // }
   // if (IsKeyPressed(KEY_F12)) ToggleFullscreen();
 
-  if (IsKeyPressed(KEY_C)) setScene(CLEAR);
+  if (IsKeyPressed(KEY_C)) setScene(-1);
   if (IsKeyPressed(KEY_S)) {
     if (IsKeyDown(KEY_LEFT_CONTROL)) {
       ImGui::SaveIniSettingsToDisk("imgui.ini");
@@ -446,7 +535,7 @@ void Demo::processKeyboardInput() {
     } else if (IsKeyDown(KEY_LEFT_SHIFT)) {
       ImGui::LoadIniSettingsFromDisk("imgui.ini");
     } else {
-      setScene(CLEAR);
+      setScene(selectedScene);
     }
   }
   if (IsKeyPressed(KEY_A)) userSetRandomColor();
@@ -462,25 +551,21 @@ void Demo::processMouseInput() {
   user.brushSize += GetMouseWheelMove() / 100;
   if      (user.brushSize < 0.05) user.brushSize = 0.05;
   else if (user.brushSize > 1.0)  user.brushSize = 1.0;
-
-  lastMousePos = GetMousePosition();
-}
-
-void Demo::resize() {
-  setBuffers();
 }
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-#define DRAW_TEXTURE_STRETCH(file) DrawTexturePro(LoadTexture(file), Rectangle{0, 0, 800, -600}, Rectangle{0, 0, GetScreenWidth(), GetScreenHeight()}, Vector2{0, 0}, 0.0, WHITE);
+void Demo::resize() {
+  setBuffers();
+  setScene(selectedScene);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 void Demo::setBuffers() {
-  Texture2D emissionTexture = emissionBuf.texture;
-  Texture2D occlusionTexture = occlusionBuf.texture;
-
-  UnloadRenderTexture(bufferA);
-  UnloadRenderTexture(bufferB);
-  UnloadRenderTexture(bufferC);
+  UnloadRenderTexture(jfaBufferA);
+  UnloadRenderTexture(jfaBufferB);
+  UnloadRenderTexture(jfaBufferC);
   UnloadRenderTexture(radianceBufferA);
   UnloadRenderTexture(radianceBufferB);
   UnloadRenderTexture(radianceBufferC);
@@ -490,7 +575,7 @@ void Demo::setBuffers() {
   UnloadRenderTexture(occlusionBuf);
   UnloadRenderTexture(emissionBuf);
 
-  // change bit depth for bufferA, B, & C so that we can encode texture coordinates without losing data
+  // change bit depth for jfaBufferA, B, & C so that we can encode texture coordinates without losing data
   // default Raylib FBOs have a bit depth of 8 per channel, which would only cover for a window of maximum size 255x255
   // we can also save some memory by reducing bit depth of buffers to what is strictly required
   auto changeBitDepth = [](RenderTexture2D &buffer, PixelFormat pixformat) {
@@ -505,9 +590,9 @@ void Demo::setBuffers() {
     rlDisableFramebuffer();
   };
 
-  bufferA         = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
-  bufferB         = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
-  bufferC         = bufferA;
+  jfaBufferA      = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
+  jfaBufferB      = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
+  jfaBufferC      = jfaBufferA;
   radianceBufferA = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
   radianceBufferB = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
   radianceBufferC = radianceBufferA;
@@ -517,9 +602,9 @@ void Demo::setBuffers() {
   emissionBuf     = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
   occlusionBuf    = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
 
-  changeBitDepth(bufferA,      PIXELFORMAT_UNCOMPRESSED_R32G32B32A32);
-  changeBitDepth(bufferB,      PIXELFORMAT_UNCOMPRESSED_R32G32B32A32);
-  changeBitDepth(bufferC,      PIXELFORMAT_UNCOMPRESSED_R32G32B32A32);
+  changeBitDepth(jfaBufferA,   PIXELFORMAT_UNCOMPRESSED_R32G32B32A32);
+  changeBitDepth(jfaBufferB,   PIXELFORMAT_UNCOMPRESSED_R32G32B32A32);
+  changeBitDepth(jfaBufferC,   PIXELFORMAT_UNCOMPRESSED_R32G32B32A32);
   changeBitDepth(sceneBuf,     PIXELFORMAT_UNCOMPRESSED_R5G5B5A1);
   changeBitDepth(distFieldBuf, PIXELFORMAT_UNCOMPRESSED_R16);
   changeBitDepth(occlusionBuf, PIXELFORMAT_UNCOMPRESSED_GRAY_ALPHA);
@@ -527,12 +612,10 @@ void Demo::setBuffers() {
 
   BeginTextureMode(occlusionBuf);
     ClearBackground(WHITE);
-    DrawTexturePro(occlusionTexture, Rectangle{0, 0, occlusionTexture.width, occlusionTexture.height}, Rectangle{0, 0, GetScreenWidth(), GetScreenHeight()}, Vector2{0, 0}, 0.0, WHITE);
   EndTextureMode();
 
   BeginTextureMode(emissionBuf);
     ClearBackground(BLACK);
-    DrawTexture(emissionTexture, 0, 0, WHITE);
   EndTextureMode();
 }
 
@@ -558,9 +641,11 @@ void Demo::loadShader(std::string shader) {
   shaders[shader] = s;
 }
 
-void Demo::setScene(Scene scene) {
+#define DRAW_TEXTURE_STRETCH(file) DrawTexturePro(LoadTexture(file), Rectangle{0, 0, 800, -600}, Rectangle{0, 0, static_cast<float>(GetScreenWidth()), static_cast<float>(GetScreenHeight())}, Vector2{0, 0}, 0.0, WHITE);
+
+void Demo::setScene(int scene) {
   switch (scene) {
-    case CLEAR:
+    case -1:
       if (user.mode == DRAWING) {
         BeginTextureMode(occlusionBuf);
           ClearBackground(WHITE);
@@ -571,17 +656,17 @@ void Demo::setScene(Scene scene) {
         EndTextureMode();
       }
       break;
-    case MAZE:
+    case 0:
       BeginTextureMode(occlusionBuf);
         DRAW_TEXTURE_STRETCH("res/textures/canvas/maze.png")
       EndTextureMode();
       break;
-    case TREES:
+    case 1:
       BeginTextureMode(occlusionBuf);
         DRAW_TEXTURE_STRETCH("res/textures/canvas/trees.png")
       EndTextureMode();
       break;
-    case PENUMBRA:
+    case 2:
       BeginTextureMode(occlusionBuf);
         DRAW_TEXTURE_STRETCH("res/textures/canvas/penumbra.png")
       EndTextureMode();
@@ -589,7 +674,7 @@ void Demo::setScene(Scene scene) {
         DRAW_TEXTURE_STRETCH("res/textures/canvas/penumbra_e.png")
       EndTextureMode();
       break;
-    case PENUMBRA2:
+    case 3:
       BeginTextureMode(occlusionBuf);
         DRAW_TEXTURE_STRETCH("res/textures/canvas/penumbra2.png")
       EndTextureMode();

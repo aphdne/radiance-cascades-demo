@@ -23,6 +23,14 @@ bool sdfCircle(vec2 pos, float r) {
   return distance(gl_FragCoord.xy, pos) < r;
 }
 
+bool sdfBox(vec2 pos, float size) {
+  return (gl_FragCoord.x > pos.x-size &&
+          gl_FragCoord.x < pos.x+size &&
+          gl_FragCoord.y > pos.y-size &&
+          gl_FragCoord.y < pos.y+size);
+}
+
+
 void main() {
   vec2 mousePos = vec2(uMousePos.x, uMousePos.y);
   vec2 lastMousePos = vec2(uLastMousePos.x, uLastMousePos.y);

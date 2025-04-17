@@ -13,21 +13,11 @@
 struct WindowData {
   ImGuiWindowFlags flags = 0;
   bool open              = true;
-  ImVec2 pos;
-  ImVec2 size;
 };
 
 enum Mode {
   DRAWING,
   LIGHTING,
-};
-
-enum Scene {
-  CLEAR,
-  MAZE,
-  TREES,
-  PENUMBRA,
-  PENUMBRA2
 };
 
 class Demo {
@@ -43,7 +33,7 @@ class Demo {
   private:
     void userSetRandomColor();
     void loadShader(std::string shader);
-    void setScene(Scene scene);
+    void setScene(int scene);
     void setBuffers();
 
     struct {
@@ -59,17 +49,18 @@ class Demo {
     // shader settings
     // global
     bool orbs;
+    bool mouseLight;
     int maxRaySteps;
     int jfaSteps;
     bool srgb;
     bool drawRainbow;
     bool rainbowAnimation;
+    float mixFactor;
+    float decayRate;
 
     // gi
     int giRayCount;
     bool giNoise;
-    float giMixFactor;
-    float giDecayRate;
 
     // rc
     int rcRayCount;
@@ -88,25 +79,28 @@ class Demo {
     WindowData sceneWindowData;
     WindowData colorWindowData;
     WindowData lightingWindowData;
+    WindowData helpWindowData;
     bool help;
+    int displayNumber;
+    int selectedScene;
 
     // RESOURCES
     std::map<std::string, Shader> shaders;
 
     Texture cursorTex;
 
+    RenderTexture2D* displayBuffer;
+    RenderTexture2D occlusionBuf;
+    RenderTexture2D emissionBuf;
     RenderTexture2D sceneBuf;
-    RenderTexture2D tempBuf;
-    RenderTexture2D bufferA;
-    RenderTexture2D bufferB;
-    RenderTexture2D bufferC;
+    RenderTexture2D jfaBufferA;
+    RenderTexture2D jfaBufferB;
+    RenderTexture2D jfaBufferC;
     RenderTexture2D distFieldBuf;
     RenderTexture2D radianceBufferA;
     RenderTexture2D radianceBufferB;
     RenderTexture2D radianceBufferC;
     RenderTexture2D lastFrameBuf;
-    RenderTexture2D occlusionBuf;
-    RenderTexture2D emissionBuf;
 };
 
 #endif /* DEMO_H */

@@ -12,19 +12,19 @@ out vec4 fragColor;
 uniform sampler2D uDistanceField;
 uniform sampler2D uSceneMap;
 uniform sampler2D uLastPass;
+uniform sampler2D uDirectLighting;
 
 uniform vec2  uResolution;
 uniform int   uBaseRayCount;
 uniform int   uMaxSteps;
-uniform float uPointA;
-uniform float uPointB;
 uniform int   uCascadeDisplayIndex;
 uniform int   uCascadeIndex;
 uniform int   uCascadeAmount;
 uniform int   uSrgb;
 uniform float uDecayRate;
-uniform int uDisableMerging;
+uniform int   uDisableMerging;
 uniform float uBaseInterval;
+uniform float uMixFactor;
 
 struct probe {
   float spacing;       // probe amount per dimension e.g. 1, 2, 4, 16
@@ -63,11 +63,27 @@ probe get_probe_info(int index) {
   p.rayPosition = floor(fragCoord / p.size);
 
   float a = uBaseInterval; // px
-  p.intervalStart = (FIRST_LEVEL) ? 0.0 : a * pow(uBaseRayCount, uCascadeIndex) / max(uResolution.x, uResolution.y);
-  p.intervalEnd = a * pow(uBaseRayCount, uCascadeIndex+1) / max(uResolution.x, uResolution.y);
+  p.intervalStart = (FIRST_LEVEL) ? 0.0 : a * pow(uBaseRayCount, uCascadeIndex) / min(uResolution.x, uResolution.y);
+  p.intervalEnd = a * pow(uBaseRayCount, uCascadeIndex+1) / min(uResolution.x, uResolution.y);
 
   return p;
 }
+
+// sourced from https://gist.github.com/Reedbeta/e8d3817e3f64bba7104b8fafd62906dfj
+vec3 lin_to_srgb(vec3 rgb)
+{
+  return mix(1.055 * pow(rgb, vec3(1.0 / 2.4)) - 0.055,
+             rgb * 12.92,
+             lessThanEqual(rgb, vec3(0.0031308)));
+}
+
+vec3 srgb_to_lin(vec3 rgb)
+{
+  return mix(pow((rgb + 0.055) * (1.0 / 1.055), vec3(2.4)),
+             rgb * (1.0/12.92),
+             lessThanEqual(rgb, vec3(0.04045)));
+}
+
 
 // altered raymarching function; only calculates coordinates with a distance between a and b
 vec4 radiance_interval(vec2 uv, vec2 dir, float a, float b) {
@@ -82,9 +98,21 @@ vec4 radiance_interval(vec2 uv, vec2 dir, float a, float b) {
       break;
 
     // surface hit
-    if (dist < EPS)
-      return max(texture(uSceneMap, uv), texture(uSceneMap, uv - (dir * (1.0/uResolution))) * uDecayRate);
-      // return texture(uSceneMap, uv);
+    if (dist < EPS) {
+      if (uMixFactor != 0) {
+        return vec4(
+            mix(
+              texture(uSceneMap, uv).rgb,
+              max(
+                texture(uDirectLighting, vec2(uv.x, -uv.y)).rgb,
+                texture(uDirectLighting, vec2(uv.x, -uv.y) - (dir * (1.0/uResolution))).rgb * uDecayRate
+              ),
+              uMixFactor
+            ),
+            1.0);
+      }
+      return vec4(texture(uSceneMap, uv).rgb, 1.0);
+    }
 
     travelledDist += dist;
     if (travelledDist >= b)
@@ -93,21 +121,11 @@ vec4 radiance_interval(vec2 uv, vec2 dir, float a, float b) {
   return vec4(0.0);
 }
 
-vec3 lin_to_srgb(vec3 color)
-{
-   vec3 x = color.rgb * 12.92;
-   vec3 y = 1.055 * pow(clamp(color.rgb, 0.0, 1.0), vec3(0.4166667)) - 0.055;
-   vec3 clr = color.rgb;
-   clr.r = (color.r < 0.0031308) ? x.r : y.r;
-   clr.g = (color.g < 0.0031308) ? x.g : y.g;
-   clr.b = (color.b < 0.0031308) ? x.b : y.b;
-   return clr.rgb;
-}
-
 void main() {
   vec4 radiance = vec4(0.0);
 
   probe p = get_probe_info(uCascadeIndex);
+  probe up = get_probe_info(uCascadeIndex+1);
 
   float baseIndex = float(uBaseRayCount) * (p.rayPosition.x + (p.spacing * p.rayPosition.y));
 
@@ -124,9 +142,8 @@ void main() {
       p.intervalEnd
     );
 
+    // merging
     if (!(LAST_LEVEL) && deltaRadiance.a == 0.0 && uDisableMerging != 1.0) {
-      probe up = get_probe_info(uCascadeIndex+1);
-
       up.position = vec2(
         mod(index, up.spacing), floor(index / up.spacing)
       ) * up.size;
@@ -141,9 +158,8 @@ void main() {
     radiance += deltaRadiance;
   }
   radiance /= uBaseRayCount;
-  // radiance *= 1.1;
 
   if (uCascadeIndex < uCascadeDisplayIndex) radiance = vec4(vec3(texture(uLastPass, gl_FragCoord.xy/uResolution)), 1.0);
 
-  fragColor = vec4((FIRST_LEVEL && uSrgb == 1) ? radiance.rgb*1.5 : radiance.rgb, 1.0);
+  fragColor = vec4((FIRST_LEVEL && uSrgb == 1) ? lin_to_srgb(radiance.rgb) : radiance.rgb, 1.0);
 }
