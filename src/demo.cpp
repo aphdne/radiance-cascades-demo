@@ -100,7 +100,11 @@ void Demo::render() {
   const Shader& scenePrepShader = shaders["prepscene.frag"];
   const Shader& distFieldShader = shaders["distfield.frag"];
   const Shader& finalShader     = shaders["final.frag"];
+  #ifdef __APPLE__
+  const Shader& drawShader      = shaders["draw_macos.frag"];
+  #else
   const Shader& drawShader      = shaders["draw.frag"];
+  #endif
 
   // uniforms
   Vector2 resolution = { (float)GetScreenWidth(), (float)GetScreenHeight() };
@@ -108,19 +112,26 @@ void Demo::render() {
   Vector2 mousePos = GetMousePosition();
   int     mouseDown = (IsMouseButtonDown(0) || IsMouseButtonDown(1)) && !ImGui::GetIO().WantCaptureMouse;
   int     rainbowAnimationInt = rainbowAnimation;
-  int     drawRainbowInt = (IsMouseButtonDown(1)) ? 0 : drawRainbow;
+  int     drawRainbowInt = (IsMouseButtonDown(1) || IsKeyDown(KEY_LEFT_SHIFT)) ? 0 : drawRainbow;
   Vector4 color;
 
   if (user.mode == DRAWING)
-    color = (IsMouseButtonDown(1)) ? Vector4{1.0, 1.0, 1.0, 1.0} : Vector4{0.0, 0.0, 0.0, 1.0};
+    color = (IsMouseButtonDown(1) || IsKeyDown(KEY_LEFT_SHIFT)) ? Vector4{1.0, 1.0, 1.0, 1.0} : Vector4{0.0, 0.0, 0.0, 1.0};
   else // user.mode == LIGHTING
-    color = (IsMouseButtonDown(1)) ? Vector4{0.0, 0.0, 0.0, 1.0} : ColorNormalize(user.brushColor);
+    color = (IsMouseButtonDown(1) || IsKeyDown(KEY_LEFT_SHIFT)) ? Vector4{0.0, 0.0, 0.0, 1.0} : ColorNormalize(user.brushColor);
 
   // -------------------------------- scene mapping
 
   // drawing to emission or occlusion map depending on `user.mode`
+  #ifdef __APPLE__
+  Texture2D canvas = (user.mode == DRAWING) ? occlusionBuf.texture : emissionBuf.texture;
+  #endif
+
   BeginTextureMode((user.mode == DRAWING) ? occlusionBuf : emissionBuf);
     BeginShaderMode(drawShader);
+      #ifdef __APPLE__
+      SetShaderValueTexture(drawShader, GetShaderLocation(drawShader, "uCanvas"), canvas);
+      #endif
       SetShaderValue(drawShader, GetShaderLocation(drawShader, "uTime"),         &time,           SHADER_UNIFORM_FLOAT);
       SetShaderValue(drawShader, GetShaderLocation(drawShader, "uMousePos"),     &mousePos,       SHADER_UNIFORM_VEC2);
       SetShaderValue(drawShader, GetShaderLocation(drawShader, "uBrushSize"),    &user.brushSize, SHADER_UNIFORM_FLOAT);
@@ -368,7 +379,7 @@ void Demo::renderUI() {
             break;
         }
       }
-      Vector2 displaySize = {80.0, 80.0*(std::min((float)GetScreenWidth(), (float)GetScreenHeight()) / std::max((float)GetScreenWidth(), (float)GetScreenHeight()))};
+      Vector2 displaySize = {80.0, (float)80.0*(std::min((float)GetScreenWidth(), (float)GetScreenHeight()) / std::max((float)GetScreenWidth(), (float)GetScreenHeight()))};
       rlImGuiImageSizeV(&displayBuffer->texture, displaySize);
 
       std::string str = "built ";
@@ -385,7 +396,7 @@ void Demo::renderUI() {
   if (!ImGui::Begin("Scene Settings", &sceneWindowData.open, sceneWindowData.flags)) {
     ImGui::End();
   } else {
-      ImGui::Text("average frame time\n%f ms (%d fps)", GetFPS(), GetFrameTime());
+      ImGui::Text("average frame time\n%f ms (%d fps)", GetFrameTime(), GetFPS());
 
       static bool toggles[] = { true, false, false, false };
       const char* names[] = { "maze", "trees", "penumbra", "penumbra 2"};

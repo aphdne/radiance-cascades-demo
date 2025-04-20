@@ -2,6 +2,8 @@
 
 out vec4 fragColor;
 
+uniform sampler2D uCanvas;
+
 uniform vec2 uResolution;
 uniform vec2 uMousePos;
 uniform vec2 uLastMousePos;
@@ -31,5 +33,8 @@ void main() {
 
   if (sdfCircle(mousePos, uBrushSize*64)) {
     fragColor = vec4((uRainbow == 1) ? hsv2rgb(vec3(uTime, 1.0, 1.0)) : uBrushColor.rgb, 1.0);
+  } else {
+    fragColor = texture(uCanvas, gl_FragCoord.xy/uResolution);
   }
 }
+
