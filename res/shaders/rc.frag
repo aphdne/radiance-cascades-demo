@@ -1,22 +1,20 @@
 #version 330 core
 
-#define PI 3.141596
 #define TWO_PI 6.2831853071795864769252867665590
-#define EPS 0.0008
-#define DECAY_RATE 1.1
+#define EPS 0.0005
 #define FIRST_LEVEL uCascadeIndex == 0
 #define LAST_LEVEL uCascadeIndex == uCascadeAmount
+#define MAX_RAY_STEPS 128
 
 out vec4 fragColor;
 
 uniform sampler2D uDistanceField;
 uniform sampler2D uSceneMap;
-uniform sampler2D uLastPass;
 uniform sampler2D uDirectLighting;
+uniform sampler2D uLastPass;
 
 uniform vec2  uResolution;
 uniform int   uBaseRayCount;
-uniform int   uMaxSteps;
 uniform int   uCascadeDisplayIndex;
 uniform int   uCascadeIndex;
 uniform int   uCascadeAmount;
@@ -63,8 +61,8 @@ probe get_probe_info(int index) {
   p.rayPosition = floor(fragCoord / p.size);
 
   float a = uBaseInterval; // px
-  p.intervalStart = (FIRST_LEVEL) ? 0.0 : a * pow(uBaseRayCount, uCascadeIndex) / min(uResolution.x, uResolution.y);
-  p.intervalEnd = a * pow(uBaseRayCount, uCascadeIndex+1) / min(uResolution.x, uResolution.y);
+  p.intervalStart = (FIRST_LEVEL) ? 0.0 : a * pow(uBaseRayCount, index) / min(uResolution.x, uResolution.y);
+  p.intervalEnd = a * pow(uBaseRayCount, index+1) / min(uResolution.x, uResolution.y);
 
   return p;
 }
@@ -89,12 +87,12 @@ vec3 srgb_to_lin(vec3 rgb)
 vec4 radiance_interval(vec2 uv, vec2 dir, float a, float b) {
   uv += a * dir;
   float travelledDist = a;
-  for (int i = 0; i < uMaxSteps; i++) {
+  for (int i = 0; i < MAX_RAY_STEPS; i++) {
     float dist = texture(uDistanceField, uv).r;         // sample distance field
     uv += (dir * dist); // march our ray
 
     // skip UVs outside of the window
-    if (uv.x != clamp(uv.x,  0.0, 1.0) || uv.y != clamp(uv.y, 0.0, 1.0))
+    if (uv.xy != clamp(uv.xy, 0.0, 1.0))
       break;
 
     // surface hit
@@ -111,7 +109,7 @@ vec4 radiance_interval(vec2 uv, vec2 dir, float a, float b) {
             ),
             1.0);
       }
-      return vec4(texture(uSceneMap, uv).rgb, 1.0);
+      return vec4(texture(uSceneMap, uv).rgb, 1.0); // this is a little redundant but produces a 2-3 fps loss when removed
     }
 
     travelledDist += dist;

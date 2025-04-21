@@ -4,7 +4,6 @@ out vec4 fragColor;
 
 uniform sampler2D uCanvas;
 
-uniform vec2 uResolution;
 uniform vec2 uMousePos;
 uniform vec2 uLastMousePos;
 uniform int uMouseDown;
@@ -28,13 +27,15 @@ bool sdfCircle(vec2 pos, float r) {
 void main() {
   if (uMouseDown == 0) return;
 
-  vec2 mousePos = vec2(uMousePos.x, uMousePos.y);
-  vec2 lastMousePos = vec2(uLastMousePos.x, uLastMousePos.y);
-
-  if (sdfCircle(mousePos, uBrushSize*64)) {
-    fragColor = vec4((uRainbow == 1) ? hsv2rgb(vec3(uTime, 1.0, 1.0)) : uBrushColor.rgb, 1.0);
-  } else {
-    fragColor = texture(uCanvas, gl_FragCoord.xy/uResolution);
+  bool sdf = false;
+  #define LERP_AMOUNT 8.0
+  for (float i = 0; i < LERP_AMOUNT; i++) {
+    if (sdfCircle(mix(uMousePos, uLastMousePos, (i-1)/(LERP_AMOUNT)), uBrushSize*64))
+      sdf = true;
   }
-}
 
+  if (sdf)
+    fragColor = vec4((uRainbow == 1) ? hsv2rgb(vec3(uTime, 1.0, 1.0)) : uBrushColor.rgb, 1.0);
+  else
+    fragColor = texture(uCanvas, gl_FragCoord.xy/textureSize(uCanvas, 0));
+}

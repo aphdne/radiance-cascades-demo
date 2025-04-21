@@ -1,8 +1,8 @@
 #version 330 core
 
-#define CENTRE vec2(uResolution.x, uResolution.y)/2
+#define CENTRE vec2(resolution.x, resolution.y)/2
 #define ORB_SPEED 2.0
-#define ORB_SIZE uResolution.x/80
+#define ORB_SIZE resolution.x/80
 
 out vec4 fragColor;
 
@@ -10,7 +10,6 @@ uniform sampler2D uOcclusionMap;
 uniform sampler2D uEmissionMap;
 
 uniform vec2 uMousePos;
-uniform vec2 uResolution;
 uniform float uTime;
 uniform int uOrbs;
 uniform int uRainbow;
@@ -46,7 +45,8 @@ bool sdfCircle(vec2 pos, float r) {
 }
 
 void main() {
-  vec2 fragCoord = gl_FragCoord.xy/uResolution;
+  vec2 resolution = textureSize(uOcclusionMap, 0);
+  vec2 fragCoord = gl_FragCoord.xy/resolution;
 
   vec4 o  = texture(uOcclusionMap, fragCoord);
   vec4 e  = texture(uEmissionMap, fragCoord);
@@ -62,29 +62,26 @@ void main() {
   else if (uRainbow == 1)
     e = vec4(hsv2rgb(vec3(ehsv.r + uTime/8, 1.0, 1.0)), 1.0);
 
-
-
   fragColor = (max(e.a, o.a) == e.a) ? e : o;
 
   vec2 p;
 
   if (uMouseLight == 1)
     if (sdfCircle(uMousePos, uBrushSize*64))
-      // fragColor = (uRainbow == 1) ? vec4(hsv2rgb(vec3(ehsv.r + uTime/8, 1.0, 1.0)), 1.0) : uBrushColor;
       fragColor = uBrushColor;
 
   if (uOrbs == 1) {
    for (int i = 0; i < 6; i++) {
-      p = (vec2(cos(uTime/ORB_SPEED+i), sin(uTime/ORB_SPEED+i)) * uResolution.y/2 + 1) / 2 + CENTRE;
-      if (sdfCircle(p, uResolution.x/80))
+      p = (vec2(cos(uTime/ORB_SPEED+i), sin(uTime/ORB_SPEED+i)) * resolution.y/2 + 1) / 2 + CENTRE;
+      if (sdfCircle(p, resolution.x/80))
         fragColor = vec4(hsv2rgb(vec3(i/6.0, 1.0, 1.0)), 1.0);
     }
 
-    p = vec2(cos(uTime/ORB_SPEED*4) * uResolution.x/4, 0) + CENTRE;
+    p = vec2(cos(uTime/ORB_SPEED*4) * resolution.x/4, 0) + CENTRE;
     if (sdfCircle(p, ORB_SIZE))
       fragColor = vec4(vec3(sin(uTime) + 1 / 2), 1.0);
 
-    p = vec2(0, sin(uTime/ORB_SPEED*4) * uResolution.x/4) + CENTRE;
+    p = vec2(0, sin(uTime/ORB_SPEED*4) * resolution.x/4) + CENTRE;
     if (sdfCircle(p, ORB_SIZE))
       fragColor = vec4(vec3(cos(uTime) + 1 / 2), 1.0);
   }

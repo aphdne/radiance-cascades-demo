@@ -1,8 +1,8 @@
 #version 330 core
 
-#define PI 3.141596
 #define TWO_PI 6.2831853071795864769252867665590
-#define EPS 0.0008
+#define EPS 0.0005
+#define MAX_RAY_STEPS 128
 
 out vec4 fragColor;
 
@@ -10,9 +10,7 @@ uniform sampler2D uDistanceField;
 uniform sampler2D uSceneMap;
 uniform sampler2D uLastFrame;
 
-uniform vec2  uResolution;
-uniform int   uRaysPerPx;
-uniform int   uMaxSteps;
+uniform int   uRayCount;
 uniform int   uSrgb;
 uniform int   uNoise;
 uniform float uDecayRate;
@@ -44,12 +42,12 @@ vec4 raymarch(vec2 uv, vec2 dir) {
    *
    * Once we have hit a surface we can sample the surface that we have hit in the scene and return it.
    */
-  for (int i = 0; i < uMaxSteps; i++) {
+  for (int i = 0; i < MAX_RAY_STEPS; i++) {
     float dist = texture(uDistanceField, uv).r;               // sample distance field
-    uv += (dir * dist) / (max(uResolution.x, uResolution.y)/min(uResolution.y, uResolution.x)); // march our ray (divided by our aspect ratio so no skewed directions)
+    uv += dir * dist; // march our ray (divided by our aspect ratio so no skewed directions)
 
     // skip UVs outside of the window
-    if (uv.x != clamp(uv.x,  0.0, 1.0) || uv.y != clamp(uv.y, 0.0, 1.0))
+    if (uv.xy != clamp(uv.xy, 0.0, 1.0))
       break;
 
     if (dist < EPS) // surface hit
@@ -62,7 +60,7 @@ vec4 raymarch(vec2 uv, vec2 dir) {
             // the picked texture is then multiplied by the decay rate so that lighting is not infinitely added
             // we also need to convert the texture from sRGB to linear colour space
             srgb_to_lin(texture(uLastFrame, vec2(uv.x, -uv.y)).rgb),
-            srgb_to_lin(texture(uLastFrame, vec2(uv.x, -uv.y) - (dir * (1.0/uResolution))).rgb) * uDecayRate
+            srgb_to_lin(texture(uLastFrame, vec2(uv.x, -uv.y) - (dir * (1.0/textureSize(uSceneMap, 0)))).rgb) * uDecayRate
           ),
           uMixFactor
         ), 1.0);
@@ -88,10 +86,11 @@ float noise(vec2 p){
 
 void main() {
  /*
-  * To calculate the radiance value of a pixel we cast `uRaysPerPx` amount of rays in all directions
-  * and add all of the resulting samples up, then divide by uRaysPerPx
+  * To calculate the radiance value of a pixel we cast `uRayCount` amount of rays in all directions
+  * and add all of the resulting samples up, then divide by uRayCount
   */
-  vec2 fragCoord = gl_FragCoord.xy/uResolution;
+  vec2 resolution = textureSize(uSceneMap, 0);
+  vec2 fragCoord = gl_FragCoord.xy/resolution;
 
   float dist = texture(uDistanceField, fragCoord).r;
   float n = 0.0; // noise
@@ -100,12 +99,12 @@ void main() {
 
   if (dist >= EPS) { // if we're not already in a wall
     // cast rays angularly with equal angles between them
-    for (float i = 0.0; i < TWO_PI; i += TWO_PI / uRaysPerPx) {
+    for (float i = 0.0; i < TWO_PI; i += TWO_PI / uRayCount) {
       float angle = i + n;
-      vec4 hitcol = raymarch(fragCoord, vec2(cos(angle) * uResolution.y/uResolution.x, sin(angle)));
+      vec4 hitcol = raymarch(fragCoord, vec2(cos(angle) * resolution.y/resolution.x, sin(angle)));
       radiance += hitcol;
     }
-    radiance /= uRaysPerPx;
+    radiance /= uRayCount;
   }
 
   fragColor = vec4((uSrgb == 1) ? lin_to_srgb(radiance.rgb) : radiance.rgb, 1.0);

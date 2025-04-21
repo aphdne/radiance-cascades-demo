@@ -3,7 +3,6 @@
 out vec4 fragColor;
 
 uniform sampler2D uSceneMap;
-uniform vec2 uResolution;
 
 /*
  * this shader prepares the canvas texture to be processed by the jump-flood algorithm in jfa.frag
@@ -11,7 +10,7 @@ uniform vec2 uResolution;
  */
 
 void main() {
-  vec2 fragCoord = gl_FragCoord.xy/uResolution; // for some reason fragTexCoord is just upside down sometimes? Raylib issue
+  vec2 fragCoord = gl_FragCoord.xy/textureSize(uSceneMap, 0); // for some reason fragTexCoord is just upside down sometimes? Raylib issue
   vec4 mask = texture(uSceneMap, fragCoord);
 
   if (mask.a == 1.0)

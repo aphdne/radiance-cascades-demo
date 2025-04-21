@@ -75,12 +75,8 @@ class Demo {
     bool skipUIRendering;
     bool debugShowBuffers;
     Vector2 lastMousePos;
-    WindowData debugWindowData;
-    WindowData sceneWindowData;
-    WindowData colorWindowData;
-    WindowData lightingWindowData;
-    WindowData helpWindowData;
-    bool help;
+    unsigned short framesSinceLastMousePos;
+    WindowData infoWindowData;
     int displayNumber;
     int selectedScene;
 

@@ -3,10 +3,8 @@
 Demo::Demo() {
 
   // --- MISC PARAMETERS
-  maxRaySteps = 128;
   jfaSteps = 512;
   selectedScene = -1;
-
   orbs = false;
   mouseLight = true;
   srgb = true;
@@ -33,30 +31,14 @@ Demo::Demo() {
   skipUIRendering = false;
   debugShowBuffers = false;
   debug = false;
-  help  = true;
   displayNumber = 0;
   displayBuffer = &lastFrameBuf;
 
-  debugWindowData.flags |= ImGuiWindowFlags_NoResize;
-  debugWindowData.flags |= ImGuiWindowFlags_NoBackground;
-
-  sceneWindowData.flags |= ImGuiWindowFlags_NoScrollbar;
-  sceneWindowData.flags |= ImGuiWindowFlags_NoResize;
-  sceneWindowData.flags |= ImGuiWindowFlags_NoBackground;
-
-  colorWindowData.flags |= ImGuiWindowFlags_NoScrollbar;
-  colorWindowData.flags |= ImGuiWindowFlags_NoResize;
-  colorWindowData.flags |= ImGuiWindowFlags_NoBackground;
-
-  lightingWindowData.flags |= ImGuiWindowFlags_NoScrollbar;
-  lightingWindowData.flags |= ImGuiWindowFlags_NoResize;
-  lightingWindowData.flags |= ImGuiWindowFlags_NoBackground;
-
-  helpWindowData.flags |= ImGuiWindowFlags_NoScrollbar;
-  helpWindowData.flags |= ImGuiWindowFlags_NoResize;
-  // helpWindowData.flags |= ImGuiWindowFlags_NoBackground;
-  helpWindowData.flags |= ImGuiWindowFlags_NoInputs;
-  helpWindowData.flags |= ImGuiWindowFlags_NoTitleBar;
+  // infoWindowData.flags |= ImGuiWindowFlags_NoScrollbar;
+  // infoWindowData.flags |= ImGuiWindowFlags_NoResize;
+  // infoWindowData.flags |= ImGuiWindowFlags_NoBackground;
+  // infoWindowData.flags |= ImGuiWindowFlags_NoInputs;
+  // infoWindowData.flags |= ImGuiWindowFlags_NoTitleBar;
 
   ImGui::GetIO().IniFilename = NULL;
   ImGui::LoadIniSettingsFromDisk("imgui.ini");
@@ -122,11 +104,11 @@ void Demo::render() {
 
   // -------------------------------- scene mapping
 
-  // drawing to emission or occlusion map depending on `user.mode`
   #ifdef __APPLE__
   Texture2D canvas = (user.mode == DRAWING) ? occlusionBuf.texture : emissionBuf.texture;
   #endif
 
+  // drawing to emission or occlusion map depending on `user.mode`
   BeginTextureMode((user.mode == DRAWING) ? occlusionBuf : emissionBuf);
     BeginShaderMode(drawShader);
       #ifdef __APPLE__
@@ -134,9 +116,9 @@ void Demo::render() {
       #endif
       SetShaderValue(drawShader, GetShaderLocation(drawShader, "uTime"),         &time,           SHADER_UNIFORM_FLOAT);
       SetShaderValue(drawShader, GetShaderLocation(drawShader, "uMousePos"),     &mousePos,       SHADER_UNIFORM_VEC2);
+      SetShaderValue(drawShader, GetShaderLocation(drawShader, "uLastMousePos"), &lastMousePos,   SHADER_UNIFORM_VEC2);
       SetShaderValue(drawShader, GetShaderLocation(drawShader, "uBrushSize"),    &user.brushSize, SHADER_UNIFORM_FLOAT);
       SetShaderValue(drawShader, GetShaderLocation(drawShader, "uBrushColor"),   &color,          SHADER_UNIFORM_VEC4);
-      SetShaderValue(drawShader, GetShaderLocation(drawShader, "uResolution"),   &resolution,     SHADER_UNIFORM_VEC2);
       SetShaderValue(drawShader, GetShaderLocation(drawShader, "uMouseDown"),    &mouseDown,      SHADER_UNIFORM_INT);
       SetShaderValue(drawShader, GetShaderLocation(drawShader, "uRainbow"),      &drawRainbowInt, SHADER_UNIFORM_INT);
       DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
@@ -157,7 +139,6 @@ void Demo::render() {
       SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uBrushSize"),  &user.brushSize,      SHADER_UNIFORM_FLOAT);
       SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uBrushColor"), &color,               SHADER_UNIFORM_VEC4);
       SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uMouseLight"), &mouseLightInt,       SHADER_UNIFORM_INT);
-      SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uResolution"), &resolution,          SHADER_UNIFORM_VEC2);
       SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uTime"),       &time,                SHADER_UNIFORM_FLOAT);
       SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uOrbs"),       &orbsInt,             SHADER_UNIFORM_INT);
       SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uRainbow"),    &rainbowAnimationInt, SHADER_UNIFORM_INT);
@@ -173,7 +154,6 @@ void Demo::render() {
     ClearBackground(BLANK);
     BeginShaderMode(prepJfaShader);
       SetShaderValueTexture(prepJfaShader, GetShaderLocation(prepJfaShader, "uSceneMap"), sceneBuf.texture);
-      SetShaderValue(prepJfaShader, GetShaderLocation(prepJfaShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
       DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
     EndShaderMode();
   EndTextureMode();
@@ -191,7 +171,6 @@ void Demo::render() {
       BeginShaderMode(jfaShader);
         SetShaderValueTexture(jfaShader, GetShaderLocation(jfaShader, "uCanvas"), jfaBufferB.texture);
         SetShaderValue(jfaShader, GetShaderLocation(jfaShader, "uJumpSize"), &j, SHADER_UNIFORM_INT);
-        SetShaderValue(jfaShader, GetShaderLocation(jfaShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
         DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
       EndShaderMode();
     EndTextureMode();
@@ -203,7 +182,6 @@ void Demo::render() {
     ClearBackground(BLANK);
     BeginShaderMode(distFieldShader);
       SetShaderValueTexture(distFieldShader, GetShaderLocation(distFieldShader, "uJFA"), jfaBufferA.texture);
-      SetShaderValue(distFieldShader, GetShaderLocation(distFieldShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
       DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
     EndShaderMode();
   EndTextureMode();
@@ -222,9 +200,7 @@ void Demo::render() {
         SetShaderValueTexture(giShader, GetShaderLocation(giShader, "uDistanceField"), distFieldBuf.texture);
         SetShaderValueTexture(giShader, GetShaderLocation(giShader, "uSceneMap"),      sceneBuf.texture);
         SetShaderValueTexture(giShader, GetShaderLocation(giShader, "uLastFrame"),     lastFrameBuf.texture);
-        SetShaderValue(giShader, GetShaderLocation(giShader, "uResolution"), &resolution,  SHADER_UNIFORM_VEC2);
-        SetShaderValue(giShader, GetShaderLocation(giShader, "uRaysPerPx"),  &giRayCount,  SHADER_UNIFORM_INT);
-        SetShaderValue(giShader, GetShaderLocation(giShader, "uMaxSteps"),   &maxRaySteps, SHADER_UNIFORM_INT);
+        SetShaderValue(giShader, GetShaderLocation(giShader, "uRayCount"),  &giRayCount,  SHADER_UNIFORM_INT);
         SetShaderValue(giShader, GetShaderLocation(giShader, "uSrgb"),       &srgbInt,     SHADER_UNIFORM_INT);
         SetShaderValue(giShader, GetShaderLocation(giShader, "uNoise"),      &giNoiseInt,  SHADER_UNIFORM_INT);
         SetShaderValue(giShader, GetShaderLocation(giShader, "uDecayRate"),  &decayRate, SHADER_UNIFORM_FLOAT);
@@ -247,6 +223,7 @@ void Demo::render() {
     }
 
   // --------------- direct lighting pass
+
     int directDisplayIndex = 0;
     srgbInt = 0;
     int uMixFactor = 0;
@@ -264,7 +241,6 @@ void Demo::render() {
           SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uLastPass"),       radianceBufferC.texture);
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uResolution"),          &resolution,          SHADER_UNIFORM_VEC2);
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uBaseRayCount"),        &rcRayCount,          SHADER_UNIFORM_INT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uMaxSteps"),            &maxRaySteps,         SHADER_UNIFORM_INT);
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uBaseInterval"),        &baseInterval,        SHADER_UNIFORM_FLOAT);
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uDisableMerging"),      &rcDisableMergingInt, SHADER_UNIFORM_INT);
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uCascadeDisplayIndex"), &directDisplayIndex,  SHADER_UNIFORM_INT);
@@ -298,7 +274,6 @@ void Demo::render() {
           SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uLastPass"),       radianceBufferC.texture);
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uResolution"),          &resolution,          SHADER_UNIFORM_VEC2);
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uBaseRayCount"),        &rcRayCount,          SHADER_UNIFORM_INT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uMaxSteps"),            &maxRaySteps,         SHADER_UNIFORM_INT);
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uBaseInterval"),        &baseInterval,        SHADER_UNIFORM_FLOAT);
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uDisableMerging"),      &rcDisableMergingInt, SHADER_UNIFORM_INT);
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uCascadeDisplayIndex"), &cascadeDisplayIndex, SHADER_UNIFORM_INT);
@@ -313,19 +288,22 @@ void Demo::render() {
     }
   }
 
-  resolution *= GetWindowScaleDPI();
-
   // -------------------------------- save to lastFrameBuf for next frame (for traditional GI) & display to main framebuffer
 
-  BeginTextureMode(lastFrameBuf);
-    DrawTextureRec(radianceBufferA.texture, {0, 0.0, (float)GetScreenWidth(), (float)GetScreenHeight()}, {0.0, 0.0}, WHITE);
-  EndTextureMode();
+  if (gi) {
+    BeginTextureMode(lastFrameBuf);
+      DrawTextureRec(radianceBufferA.texture, {0, 0.0, (float)GetScreenWidth(), (float)GetScreenHeight()}, {0.0, 0.0}, WHITE);
+    EndTextureMode();
+  }
 
-  BeginShaderMode(finalShader);
-    SetShaderValueTexture(finalShader, GetShaderLocation(finalShader, "uCanvas"), lastFrameBuf.texture);
-    SetShaderValue(finalShader, GetShaderLocation(finalShader, "uResolution"), &resolution, SHADER_UNIFORM_VEC2);
-    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
-  EndShaderMode();
+  Rectangle rcRect = { 0.0, 0.0, (float)GetScreenWidth(), (float)GetScreenHeight() };
+  Rectangle giRect = { 0.0, (float)GetScreenHeight(), (float)GetScreenWidth(), -(float)GetScreenHeight() };
+  DrawTextureRec(
+    (gi) ? lastFrameBuf.texture : radianceBufferA.texture,
+    (gi) ? giRect : rcRect,
+    { 0.0, 0.0 },
+    WHITE
+  );
 
   if (!mouseLight) {
     DrawTextureEx(user.brushTexture,
@@ -340,7 +318,7 @@ void Demo::render() {
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 void Demo::renderUI() {
-  // ImGui::ShowDemoWindow();
+  if (debug) ImGui::ShowDemoWindow();
   // dont draw our custom cursor if we are mousing over the UI
   ImGuiIO& io = ImGui::GetIO();
   if (!io.WantCaptureMouse) {
@@ -355,188 +333,248 @@ void Demo::renderUI() {
 
   if (skipUIRendering) return;
 
-  // -------------------------------- debug window
-
-  // --------------- traditional GI
-
-  if (debug) {
-  if (!ImGui::Begin("Debug", &debugWindowData.open, debugWindowData.flags)) {
-    ImGui::End();
-  } else {
-      if (ImGui::SliderInt("##display stage",   &displayNumber, 0, 3, "display stage = %i")) {
-        switch (displayNumber) {
-          case 0:
-            displayBuffer = &sceneBuf;
-            break;
-          case 1:
-            displayBuffer = &jfaBufferA;
-            break;
-          case 2:
-            displayBuffer = &distFieldBuf;
-            break;
-          case 3:
-            displayBuffer = &lastFrameBuf;
-            break;
-        }
-      }
-      Vector2 displaySize = {80.0, (float)80.0*(std::min((float)GetScreenWidth(), (float)GetScreenHeight()) / std::max((float)GetScreenWidth(), (float)GetScreenHeight()))};
-      rlImGuiImageSizeV(&displayBuffer->texture, displaySize);
-
-      std::string str = "built ";
-      str += __DATE__;
-      str += " at ";
-      str += __TIME__;
-      ImGui::Text(str.c_str());
-      ImGui::End();
-    }
-  }
-
-  // -------------------------------- scene window
-
-  if (!ImGui::Begin("Scene Settings", &sceneWindowData.open, sceneWindowData.flags)) {
-    ImGui::End();
-  } else {
-      ImGui::Text("average frame time\n%f ms (%d fps)", GetFrameTime(), GetFPS());
-
-      static bool toggles[] = { true, false, false, false };
-      const char* names[] = { "maze", "trees", "penumbra", "penumbra 2"};
-
-      // Simple selection popup (if you want to show the current selection inside the Button itself,
-      // you may want to build a string using the "###" operator to preserve a constant ID with a variable label)
-      if (ImGui::Button("select scene"))
-          ImGui::OpenPopup("scene_select");
-      ImGui::SameLine();
-      ImGui::TextUnformatted(selectedScene == -1 ? "<None>" : names[selectedScene]);
-      if (ImGui::BeginPopup("scene_select")) {
-        for (int i = 0; i < IM_ARRAYSIZE(names); i++) {
-          if (ImGui::Selectable(names[i])) {
-            selectedScene = i;
-            setScene(selectedScene);
-          }
-        }
-        ImGui::EndPopup();
-      }
-
-    ImGui::Checkbox("mouse light", &mouseLight);
-    ImGui::SetItemTooltip("draws an occluder/emitter on mouse position");
-    ImGui::Checkbox("light orb circle", &orbs);
-    ImGui::SetItemTooltip("draws some animated circles to light up the scene");
-    ImGui::End();
-  }
-
-  // -------------------------------- colour picker window
-
-  if (!ImGui::Begin("Color Picker", &colorWindowData.open, colorWindowData.flags)) {
-    ImGui::End();
-  } else {
-    if (ImGui::SmallButton("set r(a)ndom colour")) userSetRandomColor();
-    Vector4 col4 = ColorNormalize(user.brushColor);
-    float col[3] = { col4.x, col4.y, col4.z };
-    ImGui::ColorPicker3("##light color", col);
-    user.brushColor = ColorFromNormalized(Vector4{col[0], col[1], col[2], 1.0});
-    ImGui::Checkbox("draw rainbow", &drawRainbow);
-    ImGui::Checkbox("rainbow animation", &rainbowAnimation);
-    ImGui::End();
-  }
-
-  // -------------------------------- lighting settings window
-
-  if (!ImGui::Begin("Lighting Settings", &lightingWindowData.open, lightingWindowData.flags)) {
-    ImGui::End();
-  } else {
-    int giInt = gi;
-    ImGui::RadioButton("radiance cascades", &giInt, 0);
-    ImGui::RadioButton("ray tracing", &giInt, 1);
-    gi = giInt;
-
-    ImGui::SeparatorText("general settings");
-
-    ImGui::SetNextItemWidth(ImGui::GetFontSize() * 5);
-    ImGui::SliderFloat("mix factor", &mixFactor, 0.0, 1.0, "%.2f");
-    ImGui::SetItemTooltip("percentage: how much the original scene texture\nshould be mixed with the direct lighting pass");
-
-    ImGui::SetNextItemWidth(ImGui::GetFontSize() * 5);
-    ImGui::SliderFloat("propagation", &decayRate, 0.0, 2.0, "%.2f");
-    ImGui::SetItemTooltip("how much the indirect lighting should be propagated");
-
-    ImGui::Checkbox("sRGB conversion", &srgb);
-    ImGui::SetItemTooltip("conversion from linear colour space to \nsRGB colour space; sRGB skews certain \ncolour values so that colours appear more\nnaturally to the human eye");
-
-    if (gi) {
-      ImGui::SeparatorText("traditional gi");
-      ImGui::Checkbox("noise", &giNoise);
-      ImGui::SetItemTooltip("mixes noise into the lighting calculation\nso that a lower ray count can be used\nin exchange for a more noisy output");
-      ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
-      ImGui::SliderInt("ray count", &giRayCount, 0, 512, "%i");
-      ImGui::SetItemTooltip("amount of rays cast per pixel");
-    } else {
-      ImGui::SeparatorText("radiance cascades");
-
-      auto setParams = [this](int n){
-        rcRayCount = pow(4, n);
-      };
-
-      ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
-      ImGui::SliderInt("display cascade",     &cascadeDisplayIndex, 0, cascadeAmount-1, "%i");
-      ImGui::SetItemTooltip("cascade to display; seeing cascades\nindividually can help build intuition\nover how the algorithm works");
-      ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
-      ImGui::SliderFloat("base interval size",     &baseInterval, 0, 64.0, "%.2fpx");
-      ImGui::SetItemTooltip("radiance interval is used to segment rays\nthe base interval is for the first casacade\nand is exponentiated per cascade\ne.g. 1px, 2px, 4px, 16px, 64px...");
-      ImGui::Checkbox("bilinear interpolation", &rcBilinear);
-      ImGui::SetItemTooltip("as higher cascades have higher segments (probes)\ntheir output will be pixelated. interpolating\nthese outputs makes them feasible\nas a lighting solution");
-      ImGui::Checkbox("disable merging",        &rcDisableMerging);
-      ImGui::SetItemTooltip("each cascade is merged (cascaded) with\nthe cascade above it to form the\nfinal lighting solution");
-    }
-    ImGui::End();
-  }
-
   // -------------------------------- info window
 
-  float w = 200;
-  ImGui::SetNextWindowSize(ImVec2{w, 350});
-  ImGui::SetNextWindowPos(ImVec2{GetScreenWidth() - w - 4, 0});
+  // imgui's default BulletText() function does not wrap
+  #define BULLET(x) ImGui::Bullet(); ImGui::TextWrapped(x)
 
-  ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.5);
-  if (!ImGui::Begin("Help Text", &helpWindowData.open, helpWindowData.flags)) {
+  if (!ImGui::Begin("Radiance Cascades", &infoWindowData.open, infoWindowData.flags)) {
     ImGui::End();
   } else {
-    ImGui::TextWrapped("radiance cascades are a novel lighting data structure for real-time global illumination\n");
-    ImGui::TextWrapped("feel free to change some of the lighting settings; check out the traditional lighting algorithm & observe the differences! build some intuition over what's happening with radiance cascades.");
-    ImGui::SeparatorText("controls");
-    ImGui::BulletText("left mouse to draw\n");
-    ImGui::BulletText("right mouse to erase\n");
-    ImGui::BulletText("1 & 2 to switch to \ndrawing/erasing light \noccluders or emitters\n");
+    ImGui::Text("average frame time %f ms (%d fps)", GetFrameTime(), GetFPS());
+    std::string str = "built ";
+    str += __DATE__;
+    str += " at ";
+    str += __TIME__;
+    ImGui::Text(str.c_str());
+
+    if (ImGui::BeginTabBar("tab bar", ImGuiTabBarFlags_None)) {
+
+      if (ImGui::BeginTabItem("Info & Controls")) {
+        if (ImGui::CollapsingHeader("Read Me!")) {
+          ImGui::SeparatorText("ABOUT:");
+          BULLET("welcome to the radiance cascades demo 'some light painting'!");
+          BULLET("this demo showcases 2D global illumination (GI), which can trivially be defined as realistic lighting");
+          BULLET("this demo features a traditional GI algorithm alongside radiance cascades for comparison");
+          BULLET("parameters can be altered in the lighting tab and show an explanatory tooltip when moused over");
+          ImGui::SeparatorText("CONTROLS:");
+          BULLET("drawing & erasing:");
+          ImGui::Indent();
+            BULLET("LMB to draw");
+            BULLET("RMB (or LMB & left shift) to erase");
+            BULLET("scroll to change brush size");
+            BULLET("1 to switch to editing occluder");
+            BULLET("2 to switch to editing emitters");
+            BULLET("C to clear emitters or occluders depending on mode");
+            BULLET("R to reset scene - scenes can be selected in the scene tab");
+          ImGui::Unindent();
+          BULLET("other:");
+          ImGui::Indent();
+            BULLET("A to switch to a random colour");
+            BULLET("F1 to toggle hiding UI");
+            BULLET("sliders can be inputted via keyboard by clicking with cmd/ctrl");
+          ImGui::Unindent();
+        }
+        if (ImGui::CollapsingHeader("Explanatory Info")) {
+          if (ImGui::TreeNode("Outline")) {
+            BULLET("radiance cascades are a novel data structure used to create performant realistic lighting\n");
+            BULLET("radiance cascades work by reducing the pixel resolution of lighting the farther it is from a light source and using linear interpolation between light values to make up the difference");
+
+            ImGui::TreePop();
+          }
+          if (ImGui::TreeNode("Background")) {
+            BULLET("the traditional lighting algorithm works by casting N amount of rays per pixel to sample the environment, adding all the results of those samples together, and dividing by N");
+
+            ImGui::NewLine();
+
+            BULLET("radiance cascades builds off this algorithm with two key observations:");
+            ImGui::Indent();
+              BULLET("a pixel up close to a light source does not need as many rays as one farther away");
+              BULLET("pixels farther from a light source do not need as much spatial resolution as pixels closer to a light source");
+            ImGui::Unindent();
+
+            ImGui::TreePop();
+          }
+
+          if (ImGui::TreeNode("Ray Count (Angular Resolution)")) {
+            BULLET("ray count refers to the amount of rays being cast per pixel");
+            BULLET("in the traditional algorithm this number does not change - it is the same number for every pixel");
+
+            ImGui::NewLine();
+
+            BULLET("in radiance cascades this is altered to be increased depending on distance to the nearest light source");
+            BULLET("so that pixels close to a light source do not cast an unneccessary amount of rays, whilst pixels farther away continue to cast as many as they need to accurately resolve the light source");
+
+            ImGui::NewLine();
+
+            BULLET("'radiance interval' is therefore used as a discrete way of dividing raycount");
+            BULLET("interact with the slider below to see how radiance interval correlates with distance:");
+            ImGui::SliderFloat("base interval size",     &baseInterval, 0, 64.0, "%.2fpx");
+            ImGui::SetItemTooltip("radiance interval is used to segment rays\nthe base interval is for the first casacade\nand is exponentiated per cascade\ne.g. 1px, 2px, 4px, 16px, 64px...");
+            BULLET("(this is best viewed with a small light source)");
+
+            ImGui::NewLine();
+
+            BULLET("radiance interval increases expontentially so that at a base interval of 1px it will increase to 2px, then 4px, 16px, 64px, etc.");
+
+            ImGui::TreePop();
+          }
+
+          if (ImGui::TreeNode("Linear/Spatial Resolution")) {
+            BULLET("when viewing radiance interval it is easy to observe that where raycount increases there is a blurring effect");
+            BULLET("this is the effect of decreasing spatial/linear resolution - ray count and spatial/linear resolution are inversely correlated");
+            BULLET("this can be best observed by toggling bilinear interpolation - see the pixelated effect distant from light sources.");
+
+            ImGui::NewLine();
+
+            ImGui::Checkbox("bilinear interpolation", &rcBilinear);
+            ImGui::SetItemTooltip("as higher cascades have higher segments (probes)\ntheir output will be more pixelated. interpolating\nthese outputs makes them feasible\nas a lighting solution");
+
+            ImGui::NewLine();
+
+            BULLET("this is done by dividing the viewport into segments and dedicating certain ray angles to those segments, effectively cancelling out the increased performance cost of a higher ray count");
+            BULLET("these segments are then overlayed over one another (merged) to create the scene's lighting - hence radiance *cascades*");
+
+            ImGui::NewLine();
+
+            BULLET("this can be directly observed by interacting with the 'display cascade' parameter and optionally disabling merging");
+            BULLET("an exaggerated base interval can also help with observation");
+            ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
+            ImGui::SliderInt("display cascade", &cascadeDisplayIndex, 0, cascadeAmount-1, "%i");
+            ImGui::Checkbox("disable merging", &rcDisableMerging);
+            ImGui::SetItemTooltip("each cascade is merged (cascaded) with\nthe cascade above it to form the\nfinal lighting solution");
+
+            ImGui::TreePop();
+          }
+        }
+        ImGui::EndTabItem();
+      }
+
+      if (ImGui::BeginTabItem("Lighting")) {
+        ImGui::TextWrapped("please note a detailed walkthrough is available under the info & controls tab!");
+
+        int giInt = gi;
+        ImGui::RadioButton("radiance cascades", &giInt, 0);
+        ImGui::RadioButton("traditional algorithm", &giInt, 1);
+        gi = giInt;
+
+        if (ImGui::CollapsingHeader("General Settings")) {
+          ImGui::SetNextItemWidth(ImGui::GetFontSize() * 5);
+          ImGui::SliderFloat("mix factor", &mixFactor, 0.0, 1.0, "%.2f");
+          ImGui::SetItemTooltip("percentage: how much the original scene texture\nshould be mixed with the direct lighting pass");
+
+          ImGui::SetNextItemWidth(ImGui::GetFontSize() * 5);
+          ImGui::SliderFloat("propagation", &decayRate, 0.0, 2.0, "%.2f");
+          ImGui::SetItemTooltip("how much the indirect lighting should be propagated");
+
+          ImGui::Checkbox("sRGB conversion", &srgb);
+          ImGui::SetItemTooltip("conversion from linear colour space to \nsRGB colour space; sRGB skews certain \ncolour values so that colours appear more\nnaturally to the human eye");
+        }
+
+        if (ImGui::CollapsingHeader("Algorithm Settings")) {
+          if (gi) {
+            // ImGui::SeparatorText("traditional gi");
+            ImGui::Checkbox("noise", &giNoise);
+            ImGui::SetItemTooltip("mixes noise into the lighting calculation\nso that a lower ray count can be used\nin exchange for a more noisy output");
+            ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
+            ImGui::SliderInt("ray count", &giRayCount, 0, 512, "%i");
+            ImGui::SetItemTooltip("amount of rays cast per pixel");
+          } else {
+            // ImGui::SeparatorText("radiance cascades");
+
+            auto setParams = [this](int n){
+              rcRayCount = pow(4, n);
+            };
+
+            ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
+            ImGui::SliderInt("display cascade",     &cascadeDisplayIndex, 0, cascadeAmount-1, "%i");
+            ImGui::SetItemTooltip("cascade to display; seeing cascades\nindividually can help build intuition\nover how the algorithm works");
+            ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
+            ImGui::SliderFloat("base interval size",     &baseInterval, 0, 64.0, "%.2fpx");
+            ImGui::SetItemTooltip("radiance interval is used to segment rays\nthe base interval is for the first casacade\nand is exponentiated per cascade\ne.g. 1px, 2px, 4px, 16px, 64px...");
+            ImGui::Checkbox("bilinear interpolation", &rcBilinear);
+            ImGui::SetItemTooltip("as higher cascades have higher segments (probes)\ntheir output will be pixelated. interpolating\nthese outputs makes them feasible\nas a lighting solution");
+            ImGui::Checkbox("disable merging",        &rcDisableMerging);
+            ImGui::SetItemTooltip("each cascade is merged (cascaded) with\nthe cascade above it to form the\nfinal lighting solution");
+          }
+        }
+        ImGui::EndTabItem();
+      }
+
+      if (ImGui::BeginTabItem("Scene")) {
+        static bool toggles[] = { true, false, false, false };
+        const char* names[] = { "maze", "trees", "penumbra", "penumbra 2"};
+
+        // Simple selection popup (if you want to show the current selection inside the Button itself,
+        // you may want to build a string using the "###" operator to preserve a constant ID with a variable label)
+        if (ImGui::Button("select scene"))
+            ImGui::OpenPopup("scene_select");
+        ImGui::SameLine();
+        ImGui::TextUnformatted(selectedScene == -1 ? "<none>" : names[selectedScene]);
+        if (ImGui::BeginPopup("scene_select")) {
+          for (int i = 0; i < IM_ARRAYSIZE(names); i++) {
+            if (ImGui::Selectable(names[i])) {
+              selectedScene = i;
+              setScene(selectedScene);
+            }
+          }
+          if (ImGui::SliderInt("##display stage",   &displayNumber, 0, 3, "display stage = %i")) {
+            switch (displayNumber) {
+              case 0:
+                displayBuffer = &sceneBuf;
+                break;
+              case 1:
+                displayBuffer = &jfaBufferA;
+                break;
+              case 2:
+                displayBuffer = &distFieldBuf;
+                break;
+              case 3:
+                displayBuffer = &lastFrameBuf;
+                break;
+            }
+          }
+          Vector2 displaySize = {80.0, (float)80.0*(std::min((float)GetScreenWidth(), (float)GetScreenHeight()) / std::max((float)GetScreenWidth(), (float)GetScreenHeight()))};
+          rlImGuiImageSizeV(&displayBuffer->texture, displaySize);
+
+          ImGui::EndPopup();
+        }
+
+        ImGui::Checkbox("rainbow animation", &rainbowAnimation);
+        ImGui::SetItemTooltip("modulates the hue of emitters, offset by the underlying hue of the emitter itself for interesting animation");
+        ImGui::Checkbox("mouse light", &mouseLight);
+        ImGui::SetItemTooltip("draws an occluder/emitter on mouse position");
+        ImGui::Checkbox("light orb circle", &orbs);
+        ImGui::SetItemTooltip("draws some animated circles to light up the scene");
+        ImGui::EndTabItem();
+      }
+
+      if (ImGui::BeginTabItem("Colour Picker")) {
+        if (ImGui::SmallButton("set r(a)ndom colour")) userSetRandomColor();
+        ImGui::Checkbox("draw rainbow", &drawRainbow);
+        Vector4 col4 = ColorNormalize(user.brushColor);
+        float col[3] = { col4.x, col4.y, col4.z };
+        ImGui::ColorPicker3("##light color", col);
+        user.brushColor = ColorFromNormalized(Vector4{col[0], col[1], col[2], 1.0});
+        ImGui::EndTabItem();
+      }
+      ImGui::EndTabBar();
+    }
     ImGui::End();
   }
-  ImGui::PopStyleVar();
-
 }
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-// FIX: screenshots arent saved in a specified directory, might need to adapt raylib's screenshot function
 void Demo::processKeyboardInput() {
   if (IsKeyPressed(KEY_ONE))   user.mode = DRAWING;
   if (IsKeyPressed(KEY_TWO))   user.mode = LIGHTING;
 
   if (IsKeyPressed(KEY_GRAVE)) debug = !debug;
   if (IsKeyPressed(KEY_F1))    skipUIRendering = !skipUIRendering;
-  // if (IsKeyPressed(KEY_F2)) {
-  //   printf("Taking screenshot.\n");
-  //   if (!DirectoryExists("screenshots")) MakeDirectory("screenshots");
-  //   std::string pwd = GetWorkingDirectory();
-  //   ChangeDirectory("screenshots");
-  //   TakeScreenshot("screenshot.png");
-  //   ChangeDirectory(pwd.c_str());
-  // }
-  // if (IsKeyPressed(KEY_F12)) ToggleFullscreen();
 
+  if (IsKeyPressed(KEY_A)) userSetRandomColor();
   if (IsKeyPressed(KEY_C)) setScene(-1);
-  if (IsKeyPressed(KEY_S)) {
-    if (IsKeyDown(KEY_LEFT_CONTROL)) {
-      ImGui::SaveIniSettingsToDisk("imgui.ini");
-    }
-  }
   if (IsKeyPressed(KEY_R)) {
     if (IsKeyDown(KEY_LEFT_CONTROL)) {
       std::cout << "Reloading shaders." << std::endl;
@@ -549,8 +587,6 @@ void Demo::processKeyboardInput() {
       setScene(selectedScene);
     }
   }
-  if (IsKeyPressed(KEY_A)) userSetRandomColor();
-  if (IsKeyPressed(KEY_H)) help = !help;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -562,6 +598,12 @@ void Demo::processMouseInput() {
   user.brushSize += GetMouseWheelMove() / 100;
   if      (user.brushSize < 0.05) user.brushSize = 0.05;
   else if (user.brushSize > 1.0)  user.brushSize = 1.0;
+
+  if (framesSinceLastMousePos > 9) {
+    lastMousePos = GetMousePosition();
+    framesSinceLastMousePos = 0;
+  }
+  framesSinceLastMousePos++;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
