@@ -34,12 +34,6 @@ Demo::Demo() {
   displayNumber = 0;
   displayBuffer = &lastFrameBuf;
 
-  // infoWindowData.flags |= ImGuiWindowFlags_NoScrollbar;
-  // infoWindowData.flags |= ImGuiWindowFlags_NoResize;
-  // infoWindowData.flags |= ImGuiWindowFlags_NoBackground;
-  // infoWindowData.flags |= ImGuiWindowFlags_NoInputs;
-  // infoWindowData.flags |= ImGuiWindowFlags_NoTitleBar;
-
   ImGui::GetIO().IniFilename = NULL;
   ImGui::LoadIniSettingsFromDisk("imgui.ini");
   HideCursor();
@@ -356,34 +350,47 @@ void Demo::renderUI() {
           BULLET("welcome to the radiance cascades demo 'some light painting'!");
           BULLET("this demo showcases 2D global illumination (GI), which can trivially be defined as realistic lighting");
           BULLET("this demo features a traditional GI algorithm alongside radiance cascades for comparison");
-          BULLET("parameters can be altered in the lighting tab and show an explanatory tooltip when moused over");
+          BULLET("you can switch between these algorithms in the lighting tab, wherein you will also find parameters pertaining to those algorithms");
+          BULLET("note that parameters show a clarifying tooltip when moused over");
           ImGui::SeparatorText("CONTROLS:");
-          BULLET("drawing & erasing:");
+          BULLET("brushwork:");
           ImGui::Indent();
             BULLET("LMB to draw");
             BULLET("RMB (or LMB & left shift) to erase");
             BULLET("scroll to change brush size");
-            BULLET("1 to switch to editing occluder");
+            BULLET("1 to switch to editing occluders");
             BULLET("2 to switch to editing emitters");
             BULLET("C to clear emitters or occluders depending on mode");
             BULLET("R to reset scene - scenes can be selected in the scene tab");
           ImGui::Unindent();
           BULLET("other:");
           ImGui::Indent();
-            BULLET("A to switch to a random colour");
             BULLET("F1 to toggle hiding UI");
-            BULLET("sliders can be inputted via keyboard by clicking with cmd/ctrl");
+            BULLET("F2 to save a screenshot of the canvas");
+            BULLET("A to switch to a random colour");
+            BULLET("parameters can be inputted via keyboard by clicking with cmd/ctrl");
+            BULLET("this window can be resized via clicking & dragging the bottom right for easier reading");
           ImGui::Unindent();
         }
         if (ImGui::CollapsingHeader("Explanatory Info")) {
           if (ImGui::TreeNode("Outline")) {
-            BULLET("radiance cascades are a novel data structure used to create performant realistic lighting\n");
-            BULLET("radiance cascades work by reducing the pixel resolution of lighting the farther it is from a light source and using linear interpolation between light values to make up the difference");
-
+            BULLET("radiance cascades are a novel data structure used to create realistic lighting\n");
+            BULLET("radiance cascades work by reducing the pixel resolution of lighting the farther it is from a light source and using linear interpolation between light values to make up the difference whilst varying ray count to effectively eliminate the amount of rays as a limiting factor in producing lighting");
+            BULLET("this is elaborated on in the next couple sections");
             ImGui::TreePop();
           }
           if (ImGui::TreeNode("Background")) {
             BULLET("the traditional lighting algorithm works by casting N amount of rays per pixel to sample the environment, adding all the results of those samples together, and dividing by N");
+
+            static Texture2D tex = LoadTexture("res/textures/ui/raycount_diagram1.png");
+            rlImGuiImageSizeV(&tex, {160, 160});
+
+            BULLET("where the blue lines indicate a ray, and the yellow rectangle is a pixel");
+
+            ImGui::Indent();
+              BULLET("do note that these rays are not light rays - they do not come from light sources, but are cast for every single pixel");
+              BULLET("these rays sample collidable surfaces (emitters or occluders) to gather information to determine the pixel's final light value");
+            ImGui::Unindent();
 
             ImGui::NewLine();
 
@@ -400,39 +407,78 @@ void Demo::renderUI() {
             BULLET("ray count refers to the amount of rays being cast per pixel");
             BULLET("in the traditional algorithm this number does not change - it is the same number for every pixel");
 
+            static Texture2D tex = LoadTexture("res/textures/ui/raycount_diagram1.png");
+            rlImGuiImageSizeV(&tex, {160, 160});
+
             ImGui::NewLine();
 
             BULLET("in radiance cascades this is altered to be increased depending on distance to the nearest light source");
             BULLET("so that pixels close to a light source do not cast an unneccessary amount of rays, whilst pixels farther away continue to cast as many as they need to accurately resolve the light source");
 
+            static Texture2D tex2 = LoadTexture("res/textures/ui/raycount_diagram2.png");
+            rlImGuiImageSizeV(&tex2, {160, 160});
+
             ImGui::NewLine();
 
             BULLET("'radiance interval' is therefore used as a discrete way of dividing raycount");
-            BULLET("interact with the slider below to see how radiance interval correlates with distance:");
-            ImGui::SliderFloat("base interval size",     &baseInterval, 0, 64.0, "%.2fpx");
-            ImGui::SetItemTooltip("radiance interval is used to segment rays\nthe base interval is for the first casacade\nand is exponentiated per cascade\ne.g. 1px, 2px, 4px, 16px, 64px...");
-            BULLET("(this is best viewed with a small light source)");
+            BULLET("the above diagram shows three instances of radiance interval");
+            ImGui::Indent();
+              BULLET("each interval starts where the last ended, and the interval length doubles each iteration");
+              BULLET("importantly, the number of rays for each interval squares each iteration too");
+            ImGui::Unindent();
 
             ImGui::NewLine();
 
-            BULLET("radiance interval increases expontentially so that at a base interval of 1px it will increase to 2px, then 4px, 16px, 64px, etc.");
+            BULLET("interact with the slider below to see radiance interval in this demo");
+            BULLET("this is best viewed with a small light source");
+
+            ImGui::NewLine();
+
+            if (ImGui::SmallButton("show small light source"))
+              setScene(4);
+
+            ImGui::SliderFloat("base interval size",     &baseInterval, 0, 64.0, "%.2fpx");
+            ImGui::SetItemTooltip("radiance interval is used to segment rays\nthe base interval is for the first casacade\nand is exponentiated per cascade\ne.g. 1px, 2px, 4px, 16px, 64px...");
 
             ImGui::TreePop();
           }
 
           if (ImGui::TreeNode("Linear/Spatial Resolution")) {
-            BULLET("when viewing radiance interval it is easy to observe that where raycount increases there is a blurring effect");
-            BULLET("this is the effect of decreasing spatial/linear resolution - ray count and spatial/linear resolution are inversely correlated");
-            BULLET("this can be best observed by toggling bilinear interpolation - see the pixelated effect distant from light sources.");
+            BULLET("while we need to up the raycount to resolve faraway light sources, its unneccessary to cast the same amount of rays per pixel");
 
             ImGui::NewLine();
+
+            BULLET("take a penumbra:");
+            if (ImGui::SmallButton("show penumbra"))
+              setScene(2);
+
+            ImGui::NewLine();
+
+            BULLET("note how the penumbra's shadows get more blurred with distance");
+            BULLET("this shows that we do not need the same amount of visual fidelity for every pixel");
+            BULLET("light further away can therefore be calculated for a set of pixels all in one go rather than having each pixel calculate its own light");
+            BULLET("this effectively offsets the performance impact of increasing raycount with distance and can be done simply by reducing pixel resolution with distance");
+            BULLET("to recap, with distance:");
+            ImGui::Indent();
+              BULLET("raycount increases");
+              BULLET("light fidelity decreases");
+            ImGui::Unindent();
+
+            ImGui::NewLine();
+
+            BULLET("this can be more intuitively understood when interpolation between pixels is turned off:");
 
             ImGui::Checkbox("bilinear interpolation", &rcBilinear);
             ImGui::SetItemTooltip("as higher cascades have higher segments (probes)\ntheir output will be more pixelated. interpolating\nthese outputs makes them feasible\nas a lighting solution");
 
             ImGui::NewLine();
 
-            BULLET("this is done by dividing the viewport into segments and dedicating certain ray angles to those segments, effectively cancelling out the increased performance cost of a higher ray count");
+            BULLET("see the pixel resolution decreasing with distance");
+
+            ImGui::NewLine();
+
+            BULLET("as raycount is determined via radiance interval, linear resolution is too");
+            BULLET("in implementation this is done by dividing the viewport into segments and dedicating certain ray angles to those segments, effectively cancelling out the increased performance cost of a higher ray count");
             BULLET("these segments are then overlayed over one another (merged) to create the scene's lighting - hence radiance *cascades*");
 
             ImGui::NewLine();
@@ -443,9 +489,19 @@ void Demo::renderUI() {
             ImGui::SliderInt("display cascade", &cascadeDisplayIndex, 0, cascadeAmount-1, "%i");
             ImGui::Checkbox("disable merging", &rcDisableMerging);
             ImGui::SetItemTooltip("each cascade is merged (cascaded) with\nthe cascade above it to form the\nfinal lighting solution");
+            ImGui::SliderFloat("base interval size", &baseInterval, 0, 64.0, "%.2fpx");
+            ImGui::SetItemTooltip("radiance interval is used to segment rays\nthe base interval is for the first casacade\nand is exponentiated per cascade\ne.g. 1px, 2px, 4px, 16px, 64px...");
 
             ImGui::TreePop();
           }
+          if (ImGui::TreeNode("Extra Info")) {
+            BULLET("you may have noticed the ringing artifact on small light objects - this is the most glaring error with vanilla radiance cascades; it comes about from two instances of radiance interval slightly overlapping and the best way to mitigate it is still subject to research");
+            BULLET("compare with the traditional algorithm - the biggest difference is that this implementation radiance cascades only accounts for one extra light bounce, whilst the traditional algorithm works across multiple frames to produce an infinite amount of light bounces. this introduces temporal latency, which may be an issue depending on use case");
+            BULLET("you may also notice a high amount of noise for the traditional algorithm; this is to allow for a lower ray count - it can be toggled in the parameters to fully see what it does");
+
+            ImGui::TreePop();
+          }
+
         }
         ImGui::EndTabItem();
       }
@@ -572,20 +628,23 @@ void Demo::processKeyboardInput() {
 
   if (IsKeyPressed(KEY_GRAVE)) debug = !debug;
   if (IsKeyPressed(KEY_F1))    skipUIRendering = !skipUIRendering;
+  if (IsKeyPressed(KEY_F2))    saveCanvas();
 
   if (IsKeyPressed(KEY_A)) userSetRandomColor();
   if (IsKeyPressed(KEY_C)) setScene(-1);
+  if (IsKeyPressed(KEY_F)) {
+    ToggleFullscreen();
+    resize();
+  }
   if (IsKeyPressed(KEY_R)) {
     if (IsKeyDown(KEY_LEFT_CONTROL)) {
       std::cout << "Reloading shaders." << std::endl;
-      for (auto const& [key, val] : shaders) {
+      for (auto const& [key, val] : shaders)
         loadShader(key);
-      }
-    } else if (IsKeyDown(KEY_LEFT_SHIFT)) {
+    } else if (IsKeyDown(KEY_LEFT_SHIFT))
       ImGui::LoadIniSettingsFromDisk("imgui.ini");
-    } else {
+    else
       setScene(selectedScene);
-    }
   }
 }
 
@@ -599,7 +658,7 @@ void Demo::processMouseInput() {
   if      (user.brushSize < 0.05) user.brushSize = 0.05;
   else if (user.brushSize > 1.0)  user.brushSize = 1.0;
 
-  if (framesSinceLastMousePos > 9) {
+  if (framesSinceLastMousePos > 2) {
     lastMousePos = GetMousePosition();
     framesSinceLastMousePos = 0;
   }
@@ -735,5 +794,58 @@ void Demo::setScene(int scene) {
         DRAW_TEXTURE_STRETCH("res/textures/canvas/penumbra2_e.png")
       EndTextureMode();
       break;
+    case 4:
+      #ifdef __APPLE__
+      const Shader& drawShader      = shaders["draw_macos.frag"];
+      #else
+      const Shader& drawShader      = shaders["draw.frag"];
+      #endif
+
+      BeginTextureMode(occlusionBuf);
+        ClearBackground(WHITE);
+      EndTextureMode();
+      BeginTextureMode(emissionBuf);
+        ClearBackground(BLACK);
+
+        #ifdef __APPLE__
+        Texture2D canvas = emissionBuf.texture;
+        #endif
+
+        int mouseDown = 1;
+        Vector2 mousePos = { (float)GetScreenWidth()/2, (float)GetScreenHeight()/2 };
+        Vector2 tmpLastMousePos = { (float)GetScreenWidth()/2, (float)GetScreenHeight()/2 };
+        Vector4 color = ColorNormalize(user.brushColor);
+        BeginShaderMode(drawShader);
+          #ifdef __APPLE__
+          SetShaderValueTexture(drawShader, GetShaderLocation(drawShader, "uCanvas"), canvas);
+          #endif
+          SetShaderValue(drawShader, GetShaderLocation(drawShader, "uMousePos"),     &mousePos,        SHADER_UNIFORM_VEC2);
+          SetShaderValue(drawShader, GetShaderLocation(drawShader, "uLastMousePos"), &tmpLastMousePos, SHADER_UNIFORM_VEC2);
+          SetShaderValue(drawShader, GetShaderLocation(drawShader, "uBrushSize"),    &user.brushSize,  SHADER_UNIFORM_FLOAT);
+          SetShaderValue(drawShader, GetShaderLocation(drawShader, "uBrushColor"),   &color,           SHADER_UNIFORM_VEC4);
+          SetShaderValue(drawShader, GetShaderLocation(drawShader, "uMouseDown"),    &mouseDown,       SHADER_UNIFORM_INT);
+          DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
+        EndShaderMode();
+      EndTextureMode();
+
+      EndTextureMode();
+      break;
   }
+}
+
+void Demo::saveCanvas() {
+
+  Image image = LoadImageFromTexture((gi) ? lastFrameBuf.texture : radianceBufferA.texture);
+  if (gi) ImageFlipVertical(&image);
+
+  if (!DirectoryExists("screenshots"))
+    MakeDirectory("screenshots");
+
+  std::string path = "screenshots/screenshot0.png";
+  for (int i = 0; i < 100; i++) {
+    path = "screenshots/screenshot" + std::to_string(i) + ".png";
+    if (!FileExists(path.c_str())) break;
+  }
+
+  ExportImage(image, path.c_str());
 }

@@ -1,6 +1,8 @@
 #ifndef DEMO_H
 #define DEMO_H
 
+#define SUPPORT_SCREEN_CAPTURE 0
+
 #include <map>
 #include <iostream>
 #include "config.h"
@@ -35,6 +37,7 @@ class Demo {
     void loadShader(std::string shader);
     void setScene(int scene);
     void setBuffers();
+    void saveCanvas();
 
     struct {
       Mode         mode;

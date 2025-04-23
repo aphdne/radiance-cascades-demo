@@ -28,9 +28,9 @@ void main() {
   if (uMouseDown == 0) return;
 
   bool sdf = false;
-  #define LERP_AMOUNT 8.0
+  #define LERP_AMOUNT 16.0
   for (float i = 0; i < LERP_AMOUNT; i++) {
-    if (sdfCircle(mix(uMousePos, uLastMousePos, (i-1)/(LERP_AMOUNT)), uBrushSize*64))
+    if (sdfCircle(mix(uMousePos, uLastMousePos, i/(LERP_AMOUNT)), uBrushSize*64))
       sdf = true;
   }
 
