@@ -1,16 +1,12 @@
 # Radiance Cascades Demo
 
-1. [Requirements](#requirements)
-2. [Setup (macOS, Linux)](#setup-macos-linux)
-3. [Setup (Windows)](#setup-windows-visual-studio)
+![Penumbra](penumbra.png)
 
-2D lighting demo.
+2D radiance cascades lighting demo.
 
-![Gif showcasing the current state of the programme](showcase.gif)
+User can click to draw/erase on a canvas. Explanatory text is provided via UI. Check [releases](https://github.com/aphidarium/radiance-cascades-demo/releases) for executables.
 
-Current iteration implements jump-flooding and a basic 2D lighting algorithm.
-
-User can click to draw/erase on a canvas, and can press \` for a debug menu.
+PLEASE NOTE: the radiance_cascades executable has to be ran from within the same folder as `res/` to read shaders and ttextures.
 
 Maze image texture initially generated via [mazegenerator.net](https://www.mazegenerator.net/).
 
@@ -21,11 +17,15 @@ Maze image texture initially generated via [mazegenerator.net](https://www.mazeg
 
 This currently builds and runs on macOS Sequoia, Arch Linux (on X11), and Windows 11.
 
-## Setup (macOS, Linux)
+## Setup
 
-After cloning the repo and cd'ing into the repo folder:
+The project can be built via standard CMake. I recommend using `build.sh` for convenience on macOS & Linux.
+
+Typical setup will look something like this:
 
 ```bash
+# after cloning the repo and cd'ing in
+
 # grab our libraries
 git submodule update --init
 
@@ -42,22 +42,6 @@ cd .. # run the resulting binary in the source directory, not the build director
 ./radiance_cascades
 ```
 
-## Setup (Windows Visual Studio)
+On Windows this should largely look the same - just generate a solution (.sln) file via CMake on the command line or via cmake-gui and compile via Visual Studio.
 
-Clone the repository and run the following from a command prompt within the repository's directory:
-
-```bash
-# grab our libraries
-git submodule update --init
-
-# build via CMake
-mkdir build
-cd build
-cmake ..
-```
-
-This will generate a Visual Studio solution file (.sln) for you to use for compilation. Open this in Visual Studio and build it.
-
-You may get an "access is denied" error. This can be ignored. The resulting executable will be in `build/Debug`.
-
-Either **run from or move the executable to the project root directory so that it can access the resources folder**.
+Please run the executable in the same folder as `res/`! Or it won't work!
