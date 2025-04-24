@@ -1,8 +1,7 @@
 #ifndef DEMO_H
 #define DEMO_H
 
-#define SUPPORT_SCREEN_CAPTURE 0
-
+#include <string>
 #include <map>
 #include <iostream>
 #include "config.h"
