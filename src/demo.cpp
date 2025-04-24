@@ -3,7 +3,7 @@
 Demo::Demo() {
 
   // --- MISC PARAMETERS
-  jfaSteps = 512;
+  jfaSteps = 256;
   selectedScene = -1;
   orbs = false;
   mouseLight = true;
@@ -15,7 +15,7 @@ Demo::Demo() {
   giRayCount = 64;
   giNoise = true;
   mixFactor = 0.7;
-  decayRate = 1.3;
+  propagationRate = 1.3;
 
   rcRayCount = 4;
   cascadeAmount = 5;
@@ -197,7 +197,7 @@ void Demo::render() {
         SetShaderValue(giShader, GetShaderLocation(giShader, "uRayCount"),  &giRayCount,  SHADER_UNIFORM_INT);
         SetShaderValue(giShader, GetShaderLocation(giShader, "uSrgb"),       &srgbInt,     SHADER_UNIFORM_INT);
         SetShaderValue(giShader, GetShaderLocation(giShader, "uNoise"),      &giNoiseInt,  SHADER_UNIFORM_INT);
-        SetShaderValue(giShader, GetShaderLocation(giShader, "uDecayRate"),  &decayRate, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(giShader, GetShaderLocation(giShader, "uPropagationRate"),  &propagationRate, SHADER_UNIFORM_FLOAT);
         SetShaderValue(giShader, GetShaderLocation(giShader, "uMixFactor"),  &mixFactor, SHADER_UNIFORM_FLOAT);
         DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
       EndShaderMode();
@@ -274,7 +274,7 @@ void Demo::render() {
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uCascadeIndex"),        &i,                   SHADER_UNIFORM_INT);
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uCascadeAmount"),       &cascadeAmount,       SHADER_UNIFORM_INT);
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uSrgb"),                &srgbInt,             SHADER_UNIFORM_INT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uDecayRate"),           &decayRate,         SHADER_UNIFORM_FLOAT);
+          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uPropagationRate"),           &propagationRate,         SHADER_UNIFORM_FLOAT);
           SetShaderValue(rcShader, GetShaderLocation(rcShader, "uMixFactor"),           &mixFactor, SHADER_UNIFORM_FLOAT);
           DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
         EndShaderMode();
@@ -520,7 +520,7 @@ void Demo::renderUI() {
           ImGui::SetItemTooltip("percentage: how much the original scene texture\nshould be mixed with the direct lighting pass");
 
           ImGui::SetNextItemWidth(ImGui::GetFontSize() * 5);
-          ImGui::SliderFloat("propagation", &decayRate, 0.0, 2.0, "%.2f");
+          ImGui::SliderFloat("propagation", &propagationRate, 0.0, 2.0, "%.2f");
           ImGui::SetItemTooltip("how much the indirect lighting should be propagated");
 
           ImGui::Checkbox("sRGB conversion", &srgb);

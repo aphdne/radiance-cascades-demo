@@ -59,7 +59,7 @@ class Demo {
     bool drawRainbow;
     bool rainbowAnimation;
     float mixFactor;
-    float decayRate;
+    float propagationRate;
 
     // gi
     int giRayCount;

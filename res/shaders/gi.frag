@@ -2,7 +2,7 @@
 
 #define TWO_PI 6.2831853071795864769252867665590
 #define EPS 0.0005
-#define MAX_RAY_STEPS 128
+#define MAX_RAY_STEPS 256
 
 out vec4 fragColor;
 
@@ -13,7 +13,7 @@ uniform sampler2D uLastFrame;
 uniform int   uRayCount;
 uniform int   uSrgb;
 uniform int   uNoise;
-uniform float uDecayRate;
+uniform float uPropagationRate;
 uniform float uMixFactor;
 
 /* this shader performs "radiosity-based GI" - see comments */
@@ -60,7 +60,7 @@ vec4 raymarch(vec2 uv, vec2 dir) {
             // the picked texture is then multiplied by the decay rate so that lighting is not infinitely added
             // we also need to convert the texture from sRGB to linear colour space
             srgb_to_lin(texture(uLastFrame, vec2(uv.x, -uv.y)).rgb),
-            srgb_to_lin(texture(uLastFrame, vec2(uv.x, -uv.y) - (dir * (1.0/textureSize(uSceneMap, 0)))).rgb) * uDecayRate
+            srgb_to_lin(texture(uLastFrame, vec2(uv.x, -uv.y) - (dir * (1.0/textureSize(uSceneMap, 0)))).rgb) * uPropagationRate
           ),
           uMixFactor
         ), 1.0);
