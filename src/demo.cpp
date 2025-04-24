@@ -4,7 +4,7 @@ Demo::Demo() {
 
   // --- MISC PARAMETERS
   jfaSteps = 256;
-  selectedScene = -1;
+  selectedScene = 4; // pillars
   orbs = false;
   mouseLight = true;
   srgb = true;
@@ -374,8 +374,9 @@ void Demo::renderUI() {
         }
         if (ImGui::CollapsingHeader("Explanatory Info")) {
           if (ImGui::TreeNode("Outline")) {
-            BULLET("radiance cascades are a novel data structure used to create realistic lighting\n");
-            BULLET("radiance cascades work by reducing the pixel resolution of lighting the farther it is from a light source and using linear interpolation between light values to make up the difference whilst varying ray count to effectively eliminate the amount of rays as a limiting factor in producing lighting");
+            BULLET("radiance cascades are a novel data structure used to create global illumintion");
+            BULLET("radiance cascades work by reducing the pixel resolution of lighting the farther it is from a light source whilst increasing ray count at the same time");
+            BULLET("these two properties of radiance cascades remove ray count as a constraint for calculating real-time global illumination");
             BULLET("this is elaborated on in the next couple sections");
             ImGui::TreePop();
           }
@@ -435,7 +436,7 @@ void Demo::renderUI() {
             ImGui::NewLine();
 
             if (ImGui::SmallButton("show small light source"))
-              setScene(4);
+              setScene(-2);
 
             ImGui::SliderFloat("base interval size",     &baseInterval, 0, 64.0, "%.2fpx");
             ImGui::SetItemTooltip("radiance interval is used to segment rays\nthe base interval is for the first casacade\nand is exponentiated per cascade\ne.g. 1px, 2px, 4px, 16px, 64px...");
@@ -558,8 +559,8 @@ void Demo::renderUI() {
       }
 
       if (ImGui::BeginTabItem("Scene")) {
-        static bool toggles[] = { true, false, false, false };
-        const char* names[] = { "maze", "trees", "penumbra", "penumbra 2"};
+        static bool toggles[] = { true, false, false, false, true };
+        const char* names[] = { "maze", "trees", "penumbra", "penumbra 2", "pillars"};
 
         // Simple selection popup (if you want to show the current selection inside the Button itself,
         // you may want to build a string using the "###" operator to preserve a constant ID with a variable label)
@@ -755,8 +756,46 @@ void Demo::loadShader(std::string shader) {
 
 #define DRAW_TEXTURE_STRETCH(file) DrawTexturePro(LoadTexture(file), Rectangle{0, 0, 800, -600}, Rectangle{0, 0, static_cast<float>(GetScreenWidth()), static_cast<float>(GetScreenHeight())}, Vector2{0, 0}, 0.0, WHITE);
 
+// negative numbers are not selectable by the user
 void Demo::setScene(int scene) {
   switch (scene) {
+    case -2: {
+      #ifdef __APPLE__
+      const Shader& drawShader      = shaders["draw_macos.frag"];
+      #else
+      const Shader& drawShader      = shaders["draw.frag"];
+      #endif
+
+      BeginTextureMode(occlusionBuf);
+        ClearBackground(WHITE);
+      EndTextureMode();
+      BeginTextureMode(emissionBuf);
+        ClearBackground(BLACK);
+
+        #ifdef __APPLE__
+        Texture2D canvas = emissionBuf.texture;
+        #endif
+
+        int mouseDown = 1;
+        Vector2 mousePos = { (float)GetScreenWidth()/2, (float)GetScreenHeight()/2 };
+        Vector2 tmpLastMousePos = mousePos;
+        Vector4 color = ColorNormalize(user.brushColor);
+        BeginShaderMode(drawShader);
+          #ifdef __APPLE__
+          SetShaderValueTexture(drawShader, GetShaderLocation(drawShader, "uCanvas"), canvas);
+          #endif
+          SetShaderValue(drawShader, GetShaderLocation(drawShader, "uMousePos"),     &mousePos,        SHADER_UNIFORM_VEC2);
+          SetShaderValue(drawShader, GetShaderLocation(drawShader, "uLastMousePos"), &tmpLastMousePos, SHADER_UNIFORM_VEC2);
+          SetShaderValue(drawShader, GetShaderLocation(drawShader, "uBrushSize"),    &user.brushSize,  SHADER_UNIFORM_FLOAT);
+          SetShaderValue(drawShader, GetShaderLocation(drawShader, "uBrushColor"),   &color,           SHADER_UNIFORM_VEC4);
+          SetShaderValue(drawShader, GetShaderLocation(drawShader, "uMouseDown"),    &mouseDown,       SHADER_UNIFORM_INT);
+          DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
+        EndShaderMode();
+      EndTextureMode();
+
+      EndTextureMode();
+    }
+      break;
     case -1:
       if (user.mode == DRAWING) {
         BeginTextureMode(occlusionBuf);
@@ -794,7 +833,7 @@ void Demo::setScene(int scene) {
         DRAW_TEXTURE_STRETCH("res/textures/canvas/penumbra2_e.png")
       EndTextureMode();
       break;
-    case 4:
+    case 4: {
       #ifdef __APPLE__
       const Shader& drawShader      = shaders["draw_macos.frag"];
       #else
@@ -812,23 +851,26 @@ void Demo::setScene(int scene) {
         #endif
 
         int mouseDown = 1;
-        Vector2 mousePos = { (float)GetScreenWidth()/2, (float)GetScreenHeight()/2 };
-        Vector2 tmpLastMousePos = { (float)GetScreenWidth()/2, (float)GetScreenHeight()/2 };
         Vector4 color = ColorNormalize(user.brushColor);
-        BeginShaderMode(drawShader);
-          #ifdef __APPLE__
-          SetShaderValueTexture(drawShader, GetShaderLocation(drawShader, "uCanvas"), canvas);
-          #endif
-          SetShaderValue(drawShader, GetShaderLocation(drawShader, "uMousePos"),     &mousePos,        SHADER_UNIFORM_VEC2);
-          SetShaderValue(drawShader, GetShaderLocation(drawShader, "uLastMousePos"), &tmpLastMousePos, SHADER_UNIFORM_VEC2);
-          SetShaderValue(drawShader, GetShaderLocation(drawShader, "uBrushSize"),    &user.brushSize,  SHADER_UNIFORM_FLOAT);
-          SetShaderValue(drawShader, GetShaderLocation(drawShader, "uBrushColor"),   &color,           SHADER_UNIFORM_VEC4);
-          SetShaderValue(drawShader, GetShaderLocation(drawShader, "uMouseDown"),    &mouseDown,       SHADER_UNIFORM_INT);
-          DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
-        EndShaderMode();
+        for (int i = 0; i < 4; i++) {
+          Vector2 mousePos = { (float)GetScreenWidth()/4*i + (float)GetScreenWidth()/4/2, (float)GetScreenHeight()/2 };
+          Vector2 tmpLastMousePos = mousePos;
+          BeginShaderMode(drawShader);
+            #ifdef __APPLE__
+            SetShaderValueTexture(drawShader, GetShaderLocation(drawShader, "uCanvas"), canvas);
+            #endif
+            SetShaderValue(drawShader, GetShaderLocation(drawShader, "uMousePos"),     &mousePos,        SHADER_UNIFORM_VEC2);
+            SetShaderValue(drawShader, GetShaderLocation(drawShader, "uLastMousePos"), &tmpLastMousePos, SHADER_UNIFORM_VEC2);
+            SetShaderValue(drawShader, GetShaderLocation(drawShader, "uBrushSize"),    &user.brushSize,  SHADER_UNIFORM_FLOAT);
+            SetShaderValue(drawShader, GetShaderLocation(drawShader, "uBrushColor"),   &color,           SHADER_UNIFORM_VEC4);
+            SetShaderValue(drawShader, GetShaderLocation(drawShader, "uMouseDown"),    &mouseDown,       SHADER_UNIFORM_INT);
+            DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
+          EndShaderMode();
+        }
       EndTextureMode();
 
       EndTextureMode();
+    }
       break;
   }
 }
