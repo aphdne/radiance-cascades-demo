@@ -19,7 +19,7 @@ uniform int   uCascadeDisplayIndex;
 uniform int   uCascadeIndex;
 uniform int   uCascadeAmount;
 uniform int   uSrgb;
-uniform float uDecayRate;
+uniform float uPropagationRate;
 uniform int   uDisableMerging;
 uniform float uBaseInterval;
 uniform float uMixFactor;
@@ -103,7 +103,7 @@ vec4 radiance_interval(vec2 uv, vec2 dir, float a, float b) {
               texture(uSceneMap, uv).rgb,
               max(
                 texture(uDirectLighting, vec2(uv.x, -uv.y)).rgb,
-                texture(uDirectLighting, vec2(uv.x, -uv.y) - (dir * (1.0/uResolution))).rgb * uDecayRate
+                texture(uDirectLighting, vec2(uv.x, -uv.y) - (dir * (1.0/uResolution))).rgb * uPropagationRate
               ),
               uMixFactor
             ),
@@ -160,4 +160,5 @@ void main() {
   if (uCascadeIndex < uCascadeDisplayIndex) radiance = vec4(vec3(texture(uLastPass, gl_FragCoord.xy/uResolution)), 1.0);
 
   fragColor = vec4((FIRST_LEVEL && uSrgb == 1) ? lin_to_srgb(radiance.rgb) : radiance.rgb, 1.0);
+  // if (uMixFactor != 0 ) fragColor = texture(uDirectLighting, gl_FragCoord.xy/uResolution);
 }
