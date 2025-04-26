@@ -15,6 +15,8 @@ uniform int   uSrgb;
 uniform int   uNoise;
 uniform float uPropagationRate;
 uniform float uMixFactor;
+uniform int   uAmbient; // bool
+uniform vec3  uAmbientColor;
 
 /* this shader performs "radiosity-based GI" - see comments */
 
@@ -106,6 +108,7 @@ void main() {
     }
     radiance /= uRayCount;
   }
+  radiance += vec4(uAmbientColor*uAmbient*0.01, 1.0);
 
   fragColor = vec4((uSrgb == 1) ? lin_to_srgb(radiance.rgb) : radiance.rgb, 1.0);
 }

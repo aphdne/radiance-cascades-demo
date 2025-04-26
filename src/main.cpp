@@ -24,7 +24,7 @@ int main() {
   {
     demo.processMouseInput();
     demo.processKeyboardInput();
-    demo.update();
+    // demo.update();
     BeginDrawing();
       demo.render();
       rlImGuiBegin();

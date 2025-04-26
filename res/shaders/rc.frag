@@ -23,6 +23,8 @@ uniform float uPropagationRate;
 uniform int   uDisableMerging;
 uniform float uBaseInterval;
 uniform float uMixFactor;
+uniform int   uAmbient; // bool
+uniform vec3  uAmbientColor;
 
 struct probe {
   float spacing;       // probe amount per dimension e.g. 1, 2, 4, 16
@@ -82,6 +84,12 @@ vec3 srgb_to_lin(vec3 rgb)
              lessThanEqual(rgb, vec3(0.04045)));
 }
 
+// // sourced from https://www.shadertoy.com/view/NttSW7
+// vec3 sky_integral(float a0, float a1) {
+//     vec3 SI = SkyColor*(a1-a0-0.5*(cos(a1)-cos(a0)));
+//     SI += SunColor*(atan(SSunS*(SunA-a0))-atan(SSunS*(SunA-a1)))*ISSunS;
+//     return SI;
+// }
 
 // altered raymarching function; only calculates coordinates with a distance between a and b
 vec4 radiance_interval(vec2 uv, vec2 dir, float a, float b) {
@@ -156,6 +164,7 @@ void main() {
     radiance += deltaRadiance;
   }
   radiance /= uBaseRayCount;
+  radiance += vec4(uAmbientColor*uAmbient*0.005, 1.0);
 
   if (uCascadeIndex < uCascadeDisplayIndex) radiance = vec4(vec3(texture(uLastPass, gl_FragCoord.xy/uResolution)), 1.0);
 
