@@ -83,6 +83,8 @@ class Demo {
     WindowData infoWindowData;
     WindowData colorWindowData;
     WindowData settingsWindowData;
+    WindowData screenshotWindowData;
+    float timeSinceScreenshot;
     int displayNumber;
     int selectedScene;
 

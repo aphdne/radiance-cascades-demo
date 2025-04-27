@@ -1,5 +1,7 @@
 #include "demo.h"
 
+#define SCREENSHOT_POPUP_TIME 2 // seconds
+#define WINDOW_OPACITY 0.35
 #define DEFAULT_MIX_FACTOR 0.7
 #define DEFAULT_PROPAGATION_RATE 1.3
 
@@ -8,6 +10,7 @@ Demo::Demo() {
   jfaSteps = 512;
   mouseLight = true;
   drawRainbow = false;
+  timeSinceScreenshot = 0;
 
   // scene settings
   orbs = false;
@@ -51,6 +54,11 @@ Demo::Demo() {
 
   colorWindowData.flags |= ImGuiWindowFlags_NoResize;
   settingsWindowData.flags |= ImGuiWindowFlags_NoResize;
+  screenshotWindowData.flags |= ImGuiWindowFlags_NoResize;
+  screenshotWindowData.flags |= ImGuiWindowFlags_NoNav;
+  screenshotWindowData.flags |= ImGuiWindowFlags_NoInputs;
+  screenshotWindowData.flags |= ImGuiWindowFlags_NoTitleBar;
+  screenshotWindowData.open = false;
 
   // --- LOAD RESOURCES
 
@@ -346,13 +354,25 @@ void Demo::renderUI() {
                   WHITE);
   }
 
-  if (skipUIRendering) return;
+  if (screenshotWindowData.open) {
+    #define WIDTH 135
+    #define HEIGHT 25
+    ImGui::SetNextWindowBgAlpha(WINDOW_OPACITY); // Transparent background
+    ImGui::SetNextWindowPos({GetScreenWidth()/2 - WIDTH/2, GetScreenHeight()/2 - HEIGHT/2});
+    ImGui::SetNextWindowSize({WIDTH, HEIGHT});
+    if (ImGui::Begin("Screenshot", &screenshotWindowData.open, screenshotWindowData.flags)) {
+      ImGui::Text("Screenshot taken!");
+      ImGui::End();
+    }
+    timeSinceScreenshot += GetFrameTime();
+    if (timeSinceScreenshot > SCREENSHOT_POPUP_TIME)
+      screenshotWindowData.open = false;
+  }
 
-  // -------------------------------- info window
+  if (skipUIRendering) return;
 
   // imgui's default BulletTextWrapped() function does not wrap
   #define BULLET(x) ImGui::Bullet(); ImGui::TextWrapped(x)
-  #define WINDOW_OPACITY 0.35
   #define BASE_INTERVAL_SLIDER() if (ImGui::SmallButton("reset base interval")) { \
                                    baseInterval = 0.5; \
                                  } \
@@ -364,9 +384,29 @@ void Demo::renderUI() {
                                    ImGui::SetItemTooltip("The radiance cascade to display; seeing cascades\nindividually can help build intuition over how\nthe algorithm works.\nSee the tutorial for more information.")
   #define DISABLE_MERGING_TOGGLE() ImGui::Checkbox("disable merging", &rcDisableMerging); \
                                    ImGui::SetItemTooltip("each cascade is merged (cascaded) with\nthe cascade above it to form the\nfinal lighting solution.\nSee the tutorial for more information.")
+  #define RESET_SETTINGS_BUTTON() if (ImGui::SmallButton("reset all settings")) { \
+                                    drawRainbow = false; \
+                                    orbs = false; \
+                                    selectedScene = 4; \
+                                    rainbowAnimation = false; \
+                                    srgb = true; \
+                                    mixFactor = DEFAULT_MIX_FACTOR; \
+                                    propagationRate = DEFAULT_PROPAGATION_RATE; \
+                                    ambient = false; \
+                                    gi = false; \
+                                    giRayCount = 64; \
+                                    giNoise = true; \
+                                    cascadeAmount = 5; \
+                                    cascadeDisplayIndex = 0; \
+                                    rcBilinear = true; \
+                                    rcDisableMerging = false; \
+                                    baseInterval = 0.5; \
+                                  }
 
   ImGui::SetNextWindowBgAlpha(WINDOW_OPACITY); // Transparent background
-  if (ImGui::Begin("Colour Picker", &colorWindowData.open, colorWindowData.flags)) {
+  if (!ImGui::Begin("Colour Picker", &colorWindowData.open, colorWindowData.flags)) {
+    ImGui::End();
+  } else {
     if (ImGui::SmallButton("set r(a)ndom colour")) userSetRandomColor();
     ImGui::Checkbox("draw rainbow", &drawRainbow);
 
@@ -378,37 +418,13 @@ void Demo::renderUI() {
   }
 
   ImGui::SetNextWindowBgAlpha(WINDOW_OPACITY); // Transparent background
-  if (ImGui::Begin("Settings", &settingsWindowData.open, settingsWindowData.flags))
-  {
+  if (!ImGui::Begin("Settings", &settingsWindowData.open, settingsWindowData.flags)) {
+    ImGui::End();
+  } else {
     ImGui::TextWrapped("avg frame time %f ms\n(%d fps)", GetFrameTime(), GetFPS());
     if (ImGui::BeginTabBar("lighting scene settings", ImGuiTabBarFlags_None)) {
       if (ImGui::BeginTabItem("Lighting")) {
-        if (ImGui::SmallButton("reset settings")) {
-          drawRainbow = false;
-
-          // scene settings
-          orbs = false;
-          selectedScene = 4; // pillars
-          rainbowAnimation = false;
-
-          // general lighting settings
-          srgb = true;
-          mixFactor = DEFAULT_MIX_FACTOR;
-          propagationRate = DEFAULT_PROPAGATION_RATE;
-          ambient = false;
-
-          // gi settings
-          gi = false;
-          giRayCount = 64;
-          giNoise = true;
-
-          // radiance cascades settings
-          cascadeAmount = 5;
-          cascadeDisplayIndex = 0;
-          rcBilinear = true;
-          rcDisableMerging = false;
-          baseInterval = 0.5;
-        }
+        RESET_SETTINGS_BUTTON();
 
         int giInt = gi;
         ImGui::RadioButton("radiance cascades", &giInt, 0);
@@ -491,7 +507,9 @@ void Demo::renderUI() {
   }
 
   ImGui::SetNextWindowBgAlpha(WINDOW_OPACITY); // Transparent background
-  if (ImGui::Begin("Info/Tutorial", &infoWindowData.open, infoWindowData.flags)) {
+  if (!ImGui::Begin("Info/Tutorial", &infoWindowData.open, infoWindowData.flags)) {
+    ImGui::End();
+  } else {
     if (ImGui::BeginTabBar("tab bar", ImGuiTabBarFlags_None)) {
       if (ImGui::BeginTabItem("About")) {
         ImGui::TextWrapped("Welcome to 'some light painting'!");
@@ -521,14 +539,14 @@ void Demo::renderUI() {
         ImGui::Text("Misc:");
 
         BULLET("F1 to toggle hiding UI");
-        BULLET("F2 to save a screenshot of the canvas");
+        BULLET("F2 to save a screenshot of the canvas - these are exported to the 'screenshots' folder");
         BULLET("shift-R to reset UI window locations");
         BULLET("A to switch to a random colour");
         ImGui::EndTabItem();
       }
       if (ImGui::BeginTabItem("Tutorial")) {
         ImGui::PushStyleColor(ImGuiCol_Separator, ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered));
-        if (ImGui::TreeNode("Outline")) {
+        if (ImGui::TreeNodeEx("Outline", ImGuiTreeNodeFlags_Selected)) {
           ImGui::TextWrapped("Radiance cascades are a novel data structure used to create global illumination.");
 
           ImGui::TextWrapped("Global illumination can be defined as lighting where indirect lighting is present. Indirect lighting is lighting that has bounced off at least one surface before arriving to the viewer's eyes or camera. Light is direct when a straight line can be drawn from the light to the light source.");
@@ -541,7 +559,7 @@ void Demo::renderUI() {
         }
 
         ImGui::Separator();
-        if (ImGui::TreeNode("Background")) {
+        if (ImGui::TreeNodeEx("Background", ImGuiTreeNodeFlags_Selected)) {
           ImGui::TextWrapped("Going forward, it is important to note that 'rays' do not refer to light rays, but rays that sample the environment. Rays are used to gather information on the nearest surfaces from a point.");
 
           ImGui::TextWrapped("The traditional lighting algorithm in this demo is simple: it works by casting a number of rays for each pixel. These rays are then added together to produce the final light value.");
@@ -554,7 +572,7 @@ void Demo::renderUI() {
         }
 
         ImGui::Separator();
-        if (ImGui::TreeNode("Ray Count")) {
+        if (ImGui::TreeNodeEx("Ray Count", ImGuiTreeNodeFlags_Selected)) {
           ImGui::TextWrapped("Radiance cascades builds off the traditional algorithm by realising that ray count can be correlated with distance.");
 
           rlImGuiImageSizeV(&UI_1, {160, 160});
@@ -571,7 +589,7 @@ void Demo::renderUI() {
         }
 
         ImGui::Separator();
-        if (ImGui::TreeNode("Radiance Interval")) {
+        if (ImGui::TreeNodeEx("Radiance Interval", ImGuiTreeNodeFlags_Selected)) {
           ImGui::TextWrapped("Radiance interval is therefore defined as a way to explicitly define thresholds for changes in ray count. Radiance interval is measured in pixels.");
 
           rlImGuiImageSizeV(&UI_4, {160, 160});
@@ -591,7 +609,7 @@ void Demo::renderUI() {
         }
 
         ImGui::Separator();
-        if (ImGui::TreeNode("Pixel Resolution")) {
+        if (ImGui::TreeNodeEx("Pixel Resolution", ImGuiTreeNodeFlags_Selected)) {
           ImGui::TextWrapped("While ray count increases, so does computational cost. This means the more distant a pixel is from a light source, the more computation it takes to resolve due to the ray count increasing.");
 
           ImGui::TextWrapped("We can offset this cost by reducing pixel resolution while we increase ray count - effectively cancelling out the added cost of these additional rays.");
@@ -619,7 +637,7 @@ void Demo::renderUI() {
         }
 
         ImGui::Separator();
-        if (ImGui::TreeNode("Radiance Cascades")) {
+        if (ImGui::TreeNodeEx("Radiance Cascades", ImGuiTreeNodeFlags_Selected)) {
           ImGui::TextWrapped("A radiance cascade is a section of light in accordance with a certain radiance interval. Each radiance interval has its corresponding cascade. They can be observed using the slider below.");
 
           rlImGuiImageSizeV(&UI_6, {240, 160});
@@ -628,6 +646,7 @@ void Demo::renderUI() {
 
           ImGui::TextWrapped("See how each cascade encodes a specific radiance interval - and how two of them are segmented into 4 and 16 parts. This segmentation is how pixel resolution is decreased whilst ray count is increased.");
 
+          RESET_SETTINGS_BUTTON();
           BILINEAR_INTERPOLATION_TOGGLE();
           BASE_INTERVAL_SLIDER();
           DISPLAY_CASCADE_SLIDER();
@@ -637,7 +656,7 @@ void Demo::renderUI() {
         }
 
         ImGui::Separator();
-        if (ImGui::TreeNode("Extra Info")) {
+        if (ImGui::TreeNodeEx("Extra Info", ImGuiTreeNodeFlags_Selected)) {
           ImGui::TextWrapped("You may have noticed the ringing artifacts on smaller light sources - this is subject to research - radiance cascades is new after all. This error comes from radiance intervals slightly overlapping.");
 
           ImGui::TextWrapped("Compare with the traditional algorithm - the biggest difference between them is that this implementation of radiance cascades only produces one light bounce. The traditional algorithm produces many more, but this comes at the cost of latency - the traditional algorithm is ran across multiple frames, whilst radiance cascades are produced all within one frame.");
@@ -928,7 +947,6 @@ void Demo::setScene(int scene) {
 }
 
 void Demo::saveCanvas() {
-
   Image image = LoadImageFromTexture((gi) ? lastFrameBuf.texture : radianceBufferA.texture);
   if (gi) ImageFlipVertical(&image);
 
@@ -942,4 +960,7 @@ void Demo::saveCanvas() {
   }
 
   ExportImage(image, path.c_str());
+
+  timeSinceScreenshot = 0;
+  screenshotWindowData.open = true;
 }

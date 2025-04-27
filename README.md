@@ -4,7 +4,7 @@
 
 2D radiance cascades implementation via Raylib. Check [releases](https://github.com/aphidarium/radiance-cascades-demo/releases) for executables.
 
-PLEASE NOTE: the radiance_cascades executable has to be ran from within the same folder as `res/` to read shaders and ttextures.
+PLEASE NOTE: the radiance_cascades executable has to be ran from within the same folder as `res/` to read shaders and textures.
 
 ## Building
 
