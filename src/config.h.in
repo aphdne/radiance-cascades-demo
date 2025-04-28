@@ -10,18 +10,6 @@
 
 #define VERSION "@radiance_cascades_VERSION_MAJOR@.@radiance_cascades_VERSION_MINOR@_@radiance_cascades_VERSION_PATCH@"
 
-// ---
-
 #define PRINT(x) std::cout << #x << ": " << x << std::endl
 
-// --- config variables
-
-#define GLSL_VERSION 330
-
-#define SCREEN_WIDTH  800
-#define SCREEN_HEIGHT 600
-
 #define CURSOR_SIZE 0.1
-
-#define MIN_LIGHT_SIZE 16.0f
-#define MAX_LIGHT_SIZE 512.0f

@@ -4,6 +4,7 @@
 #define WINDOW_OPACITY 0.35
 #define DEFAULT_MIX_FACTOR 0.7
 #define DEFAULT_PROPAGATION_RATE 1.3
+#define MAX_SCENES 5
 
 Demo::Demo() {
   // misc settings
@@ -52,8 +53,8 @@ Demo::Demo() {
   ImGui::LoadIniSettingsFromDisk("imgui.ini");
   HideCursor();
 
-  colorWindowData.flags |= ImGuiWindowFlags_NoResize;
-  settingsWindowData.flags |= ImGuiWindowFlags_NoResize;
+  // colorWindowData.flags |= ImGuiWindowFlags_NoResize;
+  // settingsWindowData.flags |= ImGuiWindowFlags_NoResize;
   screenshotWindowData.flags |= ImGuiWindowFlags_NoResize;
   screenshotWindowData.flags |= ImGuiWindowFlags_NoNav;
   screenshotWindowData.flags |= ImGuiWindowFlags_NoInputs;
@@ -75,6 +76,8 @@ Demo::Demo() {
   UnloadDirectoryFiles(shaderFiles);
 
   setBuffers();
+
+  setScene(selectedScene);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -358,7 +361,7 @@ void Demo::renderUI() {
     #define WIDTH 135
     #define HEIGHT 25
     ImGui::SetNextWindowBgAlpha(WINDOW_OPACITY); // Transparent background
-    ImGui::SetNextWindowPos({GetScreenWidth()/2 - WIDTH/2, GetScreenHeight()/2 - HEIGHT/2});
+    ImGui::SetNextWindowPos({(float)GetScreenWidth()/2 - WIDTH/2, (float)GetScreenHeight()/2 - HEIGHT/2});
     ImGui::SetNextWindowSize({WIDTH, HEIGHT});
     if (ImGui::Begin("Screenshot", &screenshotWindowData.open, screenshotWindowData.flags)) {
       ImGui::Text("Screenshot taken!");
@@ -373,16 +376,15 @@ void Demo::renderUI() {
 
   // imgui's default BulletTextWrapped() function does not wrap
   #define BULLET(x) ImGui::Bullet(); ImGui::TextWrapped(x)
-  #define BASE_INTERVAL_SLIDER() if (ImGui::SmallButton("reset base interval")) { \
+  #define BASE_INTERVAL_SLIDER() if (ImGui::SmallButton("reset base interval")) \
                                    baseInterval = 0.5; \
-                                 } \
                                  ImGui::SliderFloat("base interval size",     &baseInterval, 0, 64.0, "%.2fpx"); \
                                  ImGui::SetItemTooltip("Radiance interval is used to segment rays.\nThe base interval is for the first casacade\nand is exponentiated per cascade\ne.g. 1px, 2px, 4px, 16px, 64px...\nSee the tutorial for more information.")
   #define BILINEAR_INTERPOLATION_TOGGLE() ImGui::Checkbox("bilinear interpolation", &rcBilinear); \
                                           ImGui::SetItemTooltip("Light further away is drawn at a lower resolution\nto save rendering times. Interpolating\nbetween these pixels makes it look smoother.")
   #define DISPLAY_CASCADE_SLIDER() ImGui::SliderInt("display cascade",     &cascadeDisplayIndex, 0, cascadeAmount-1, "%i"); \
                                    ImGui::SetItemTooltip("The radiance cascade to display; seeing cascades\nindividually can help build intuition over how\nthe algorithm works.\nSee the tutorial for more information.")
-  #define DISABLE_MERGING_TOGGLE() ImGui::Checkbox("disable merging", &rcDisableMerging); \
+  #define DISABLE_MERGING_TOGGLE(x) ImGui::Checkbox(x, &rcDisableMerging); \
                                    ImGui::SetItemTooltip("each cascade is merged (cascaded) with\nthe cascade above it to form the\nfinal lighting solution.\nSee the tutorial for more information.")
   #define RESET_SETTINGS_BUTTON() if (ImGui::SmallButton("reset all settings")) { \
                                     drawRainbow = false; \
@@ -402,6 +404,14 @@ void Demo::renderUI() {
                                     rcDisableMerging = false; \
                                     baseInterval = 0.5; \
                                   }
+  #define SMALL_LIGHT_SOURCE_BUTTON() if (ImGui::SmallButton("show small light source")) { \
+                                        selectedScene = -2; \
+                                        setScene(-2); \
+                                      }
+  #define ALGORITHM_SWITCHES() int giInt = gi; \
+                               ImGui::RadioButton("radiance cascades", &giInt, 0); \
+                               ImGui::RadioButton("traditional algorithm", &giInt, 1); \
+                               gi = giInt
 
   ImGui::SetNextWindowBgAlpha(WINDOW_OPACITY); // Transparent background
   if (!ImGui::Begin("Colour Picker", &colorWindowData.open, colorWindowData.flags)) {
@@ -422,86 +432,66 @@ void Demo::renderUI() {
     ImGui::End();
   } else {
     ImGui::TextWrapped("avg frame time %f ms\n(%d fps)", GetFrameTime(), GetFPS());
-    if (ImGui::BeginTabBar("lighting scene settings", ImGuiTabBarFlags_None)) {
-      if (ImGui::BeginTabItem("Lighting")) {
-        RESET_SETTINGS_BUTTON();
 
-        int giInt = gi;
-        ImGui::RadioButton("radiance cascades", &giInt, 0);
-        ImGui::RadioButton("traditional algorithm", &giInt, 1);
-        gi = giInt;
+    RESET_SETTINGS_BUTTON();
 
-        if (ImGui::CollapsingHeader("General Settings")) {
-          ImGui::SetNextItemWidth(ImGui::GetFontSize() * 5);
-          ImGui::SliderFloat("mix factor", &mixFactor, 0.0, 1.0, "%.2f");
-          ImGui::SetItemTooltip("How much indirect lighting should be present in the scene.");
+    const char* scenes[] = { "maze", "trees", "yellow penumbra", "rainbow penumbra", "pillars", "grid"};
 
-          ImGui::SetNextItemWidth(ImGui::GetFontSize() * 5);
-          ImGui::SliderFloat("propagation", &propagationRate, 0.0, 2.0, "%.2f");
-          ImGui::SetItemTooltip("Indirect lighting is multiplied by this value.");
+    if (ImGui::Button("select scene"))
+        ImGui::OpenPopup("scene_select");
 
-          ImGui::Checkbox("ambient light", &ambient);
-          ImGui::SetItemTooltip("Adds a baseline light level to the scene.");
-
-          if (ambient) {
-            float col[3] = { ambientColor.x, ambientColor.y, ambientColor.z };
-            ImGui::ColorPicker3("##ambient color", col);
-            ambientColor = {col[0], col[1], col[2]};
-          }
-
-          // ImGui::Checkbox("sRGB conversion", &srgb);
+    ImGui::SameLine();
+    ImGui::TextUnformatted(selectedScene < 0 ? "<none>" : scenes[selectedScene]);
+    if (ImGui::BeginPopup("scene_select")) {
+      for (int i = 0; i < IM_ARRAYSIZE(scenes); i++) {
+        if (ImGui::Selectable(scenes[i])) {
+          setScene(i);
         }
+      }
+      ImGui::EndPopup();
+    }
 
-        if (ImGui::CollapsingHeader("Algorithm Settings")) {
-          if (gi) {
-            ImGui::Checkbox("noise", &giNoise);
-            ImGui::SetItemTooltip("Mixes noise into the lighting calculation\nso that a lower ray count can be used\nin exchange for a visually noisier output.");
-            ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
-            ImGui::SliderInt("ray count", &giRayCount, 0, 512, "%i");
-            ImGui::SetItemTooltip("Amount of rays cast per pixel.");
-          } else {
-            auto setParams = [this](int n){
-              rcRayCount = pow(4, n);
-            };
+    ALGORITHM_SWITCHES();
 
-            ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
-            DISPLAY_CASCADE_SLIDER();
-            ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
-            BASE_INTERVAL_SLIDER();
-            BILINEAR_INTERPOLATION_TOGGLE();
-            DISABLE_MERGING_TOGGLE();
-          }
-        }
-        ImGui::EndTabItem();
+    if (ImGui::CollapsingHeader("General Settings")) {
+      ImGui::Checkbox("rainbow animation", &rainbowAnimation);
+      ImGui::SetItemTooltip("Modulates the hue of emitters.");
+
+      ImGui::Checkbox("light orb circle", &orbs);
+
+      ImGui::Checkbox("ambient light", &ambient);
+      ImGui::SetItemTooltip("Adds a baseline light level to the scene.");
+
+      if (ambient) {
+        float col[3] = { ambientColor.x, ambientColor.y, ambientColor.z };
+        ImGui::ColorPicker3("##ambient color", col);
+        ambientColor = {col[0], col[1], col[2]};
       }
 
-      if (ImGui::BeginTabItem("Scene")) {
-        const char* scenes[] = { "maze", "trees", "penumbra", "penumbra 2", "pillars", "grid"};
+      ImGui::SetNextItemWidth(ImGui::GetFontSize() * 5);
+      ImGui::SliderFloat("indirect lighting amount", &mixFactor, 0.0, 1.0, "%.2f");
+      ImGui::SetItemTooltip("How much indirect lighting should be present in the scene.");
 
-        if (ImGui::Button("select scene"))
-            ImGui::OpenPopup("scene_select");
+      ImGui::SetNextItemWidth(ImGui::GetFontSize() * 5);
+      ImGui::SliderFloat("indirect lighting brightness", &propagationRate, 0.0, 2.0, "%.2f");
+      ImGui::SetItemTooltip("Indirect lighting is multiplied by this value.");
+    }
 
-        ImGui::SameLine();
-        ImGui::TextUnformatted(selectedScene < 0 ? "<none>" : scenes[selectedScene]);
-        if (ImGui::BeginPopup("scene_select")) {
-          for (int i = 0; i < IM_ARRAYSIZE(scenes); i++) {
-            if (ImGui::Selectable(scenes[i])) {
-              selectedScene = i;
-              setScene(selectedScene);
-            }
-          }
-          ImGui::EndPopup();
-        }
-
-        ImGui::NewLine();
-
-        ImGui::Checkbox("rainbow animation", &rainbowAnimation);
-        ImGui::SetItemTooltip("Modulates the hue of emitters.");
-        ImGui::Checkbox("light orb circle", &orbs);
-        ImGui::SetItemTooltip("Draws some animated circles.");
-        ImGui::EndTabItem();
+    if (ImGui::CollapsingHeader("Algorithm Settings")) {
+      if (gi) {
+        ImGui::Checkbox("noise", &giNoise);
+        ImGui::SetItemTooltip("Mixes noise into the lighting calculation\nso that a lower ray count can be used\nin exchange for a visually noisier output.");
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
+        ImGui::SliderInt("ray count", &giRayCount, 0, 512, "%i");
+        ImGui::SetItemTooltip("Amount of rays cast per pixel.");
+      } else {
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
+        DISPLAY_CASCADE_SLIDER();
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
+        BASE_INTERVAL_SLIDER();
+        BILINEAR_INTERPOLATION_TOGGLE();
+        DISABLE_MERGING_TOGGLE("disable cascade merging");
       }
-      ImGui::EndTabBar();
     }
     ImGui::End();
   }
@@ -527,21 +517,23 @@ void Demo::renderUI() {
 
         ImGui::Text("Changing editing modes:");
 
-        BULLET("1 to switch to editing occluders");
-        BULLET("2 to switch to editing emitters");
+        BULLET("1 to switch to"); ImGui::SameLine(); if (ImGui::SmallButton("editing occluders")) user.mode == DRAWING;
+        BULLET("2 to switch to");  ImGui::SameLine(); if (ImGui::SmallButton("editing emitters"))  user.mode == LIGHTING;
         BULLET("Space or tab to toggle between editing occluders or emitters");
 
         ImGui::Text("Canvas:");
 
-        BULLET("C to clear emitters or occluders dependant on mode");
-        BULLET("R to reset the current scene (scenes can be selected in the scene tab");
+        BULLET("C to"); ImGui::SameLine(); if (ImGui::SmallButton("clear emitters/occluders dependant on mode")) setScene(-1);
+        BULLET("R to"); ImGui::SameLine(); if (ImGui::SmallButton("reset the current scene")) setScene(selectedScene);
+        BULLET("S to"); ImGui::SameLine(); if (ImGui::SmallButton("change scene")) setScene(selectedScene++);
 
         ImGui::Text("Misc:");
 
         BULLET("F1 to toggle hiding UI");
-        BULLET("F2 to save a screenshot of the canvas - these are exported to the 'screenshots' folder");
+        BULLET("F2 to"); ImGui::SameLine(); if (ImGui::SmallButton("save a screenshot")) saveCanvas(); ImGui::SameLine(); ImGui::TextWrapped("of the canvas");
         BULLET("shift-R to reset UI window locations");
-        BULLET("A to switch to a random colour");
+        BULLET("shift-R to"); ImGui::SameLine(); if (ImGui::SmallButton("reset the UI")) ImGui::LoadIniSettingsFromDisk("imgui.ini");
+        BULLET("A to"); ImGui::SameLine(); if (ImGui::SmallButton("switch to a random colour")) userSetRandomColor();
         ImGui::EndTabItem();
       }
       if (ImGui::BeginTabItem("Tutorial")) {
@@ -598,10 +590,7 @@ void Demo::renderUI() {
 
           ImGui::TextWrapped("Interact with the slider below to observe radiance interval in this demo. This is best shown with a small light source, otherwise it may just look noisy.");
 
-          if (ImGui::SmallButton("show small light source")) {
-            selectedScene = -2;
-            setScene(-2);
-          }
+          SMALL_LIGHT_SOURCE_BUTTON();
           ImGui::SameLine();
           BASE_INTERVAL_SLIDER();
 
@@ -638,19 +627,37 @@ void Demo::renderUI() {
 
         ImGui::Separator();
         if (ImGui::TreeNodeEx("Radiance Cascades", ImGuiTreeNodeFlags_Selected)) {
-          ImGui::TextWrapped("A radiance cascade is a section of light in accordance with a certain radiance interval. Each radiance interval has its corresponding cascade. They can be observed using the slider below.");
+          ImGui::TextWrapped("A radiance cascade is an embodiment of a radiance interval with an altered ray count and pixel resolution.");
+
+          ImGui::TextWrapped("Radiance cascades can be best observed with a small light source and with an exaggerated base interval");
+
+          SMALL_LIGHT_SOURCE_BUTTON();
+
+          if (ImGui::SmallButton("exaggerate base interval"))
+            baseInterval = 10.0;
+
+          ImGui::SameLine();
+
+          if (ImGui::SmallButton("reset"))
+            baseInterval = 0.5;
+
+          ImGui::TextWrapped("This demo uses 5 radiance cascades to light up the scene. Each cascade is merged with the cascade above it to form the lighting. Disable merging to observe the first cascade - this is cascade 0.");
+
+          DISABLE_MERGING_TOGGLE("disable merging");
 
           rlImGuiImageSizeV(&UI_6, {240, 160});
-          rlImGuiImageSizeV(&UI_7, {240, 160});
-          rlImGuiImageSizeV(&UI_8, {240, 160});
 
-          ImGui::TextWrapped("See how each cascade encodes a specific radiance interval - and how two of them are segmented into 4 and 16 parts. This segmentation is how pixel resolution is decreased whilst ray count is increased.");
+          ImGui::TextWrapped("Building on how the lighting looks with merging, you may not expect the next cascade - cascade 1 - to look something like this:");
+
+          rlImGuiImageSizeV(&UI_7, {240, 160});
+
+          ImGui::TextWrapped("Cascades reduce pixel resolution whilst increasing ray count by segmenting the screen. At cascade 0 the screen is in 1 segment. The following cascade (cascade 1) segments into 4, the next is 16, and so on. This allows reducing pixel resolution to offset an increased ray count, cancelling out the performance impact.");
 
           RESET_SETTINGS_BUTTON();
           BILINEAR_INTERPOLATION_TOGGLE();
           BASE_INTERVAL_SLIDER();
           DISPLAY_CASCADE_SLIDER();
-          DISABLE_MERGING_TOGGLE();
+          DISABLE_MERGING_TOGGLE("cascade merging disabled");
 
           ImGui::TreePop();
         }
@@ -658,6 +665,8 @@ void Demo::renderUI() {
         ImGui::Separator();
         if (ImGui::TreeNodeEx("Extra Info", ImGuiTreeNodeFlags_Selected)) {
           ImGui::TextWrapped("You may have noticed the ringing artifacts on smaller light sources - this is subject to research - radiance cascades is new after all. This error comes from radiance intervals slightly overlapping.");
+
+          ALGORITHM_SWITCHES();
 
           ImGui::TextWrapped("Compare with the traditional algorithm - the biggest difference between them is that this implementation of radiance cascades only produces one light bounce. The traditional algorithm produces many more, but this comes at the cost of latency - the traditional algorithm is ran across multiple frames, whilst radiance cascades are produced all within one frame.");
 
@@ -688,13 +697,14 @@ void Demo::processKeyboardInput() {
   if (IsKeyPressed(KEY_F2))    saveCanvas();
 
   // setting settings
-  if (IsKeyPressed(KEY_A)) userSetRandomColor();
+  if (IsKeyDown(KEY_A)) userSetRandomColor();
   if (IsKeyPressed(KEY_C) || IsKeyPressed(KEY_BACKSPACE) || IsKeyPressed(KEY_DELETE)) setScene(-1); // clear scene depending on mode
+  if (IsKeyPressed(KEY_S)) setScene(selectedScene++);
   if (IsKeyPressed(KEY_F)) {
     ToggleFullscreen();
     resize();
   }
-  if (IsKeyPressed(KEY_R)) {
+  if (IsKeyDown(KEY_R)) {
     if (IsKeyDown(KEY_LEFT_CONTROL)) { // reload shaders
       std::cout << "Reloading shaders." << std::endl;
       for (auto const& [key, val] : shaders)
@@ -815,6 +825,10 @@ void Demo::loadShader(std::string shader) {
 
 // NOTE: negative numbers are not selectable by the user
 void Demo::setScene(int scene) {
+  if (scene > MAX_SCENES) {
+    selectedScene = 0;
+    scene = 0;
+  }
 
   // some scenes are drawn by reading an image file, others are drawn directly via shader
   #ifdef __APPLE__

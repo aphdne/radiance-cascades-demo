@@ -11,8 +11,8 @@ int main() {
   title += VERSION;
 
   SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-  InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, title.c_str());
-  // SetTargetFPS(GetMonitorRefreshRate(GetCurrentMonitor()));
+  InitWindow(1600, 900, title.c_str());
+  SetTargetFPS(GetMonitorRefreshRate(GetCurrentMonitor()));
   SetTraceLogLevel(LOG_WARNING);
   rlImGuiSetup(true);
 

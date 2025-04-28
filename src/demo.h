@@ -97,7 +97,6 @@ class Demo {
     const Texture2D UI_5  = LoadTexture("res/textures/ui/5_bilinear.png");
     const Texture2D UI_6  = LoadTexture("res/textures/ui/6_cascade0.png");
     const Texture2D UI_7  = LoadTexture("res/textures/ui/7_cascade1.png");
-    const Texture2D UI_8  = LoadTexture("res/textures/ui/8_cascade2.png");
 
     // RESOURCES
     std::map<std::string, Shader> shaders;
