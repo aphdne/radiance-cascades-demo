@@ -25,8 +25,6 @@ bool sdfCircle(vec2 pos, float r) {
 }
 
 void main() {
-  if (uMouseDown == 0) return;
-
   bool sdf = false;
   #define LERP_AMOUNT 16.0
   for (float i = 0; i < LERP_AMOUNT; i++) {
@@ -34,7 +32,7 @@ void main() {
       sdf = true;
   }
 
-  if (sdf)
+  if (sdf && uMouseDown == 1)
     fragColor = vec4((uRainbow == 1) ? hsv2rgb(vec3(uTime, 1.0, 1.0)) : uBrushColor.rgb, 1.0);
   else
     fragColor = texture(uCanvas, gl_FragCoord.xy/textureSize(uCanvas, 0));

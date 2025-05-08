@@ -26,6 +26,7 @@ void main() {
 
   vec2 resolution = textureSize(uCanvas, 0);
   vec2 fragCoord = gl_FragCoord.xy/resolution; // for some reason fragTexCoord is just upside down sometimes? Raylib issue
+  fragColor = texture(uCanvas, fragCoord);
   float closest = 1.0;
   for (int Nx = -1; Nx <= 1; Nx++) {
     for (int Ny = -1; Ny <= 1; Ny++) {

@@ -66,9 +66,8 @@ void main() {
 
   vec2 p;
 
-  if (uMouseLight == 1)
-    if (sdfCircle(uMousePos, uBrushSize*64))
-      fragColor = uBrushColor;
+  if (sdfCircle(uMousePos, uBrushSize*64))
+    fragColor = uBrushColor;
 
   if (uOrbs == 1) {
    for (int i = 0; i < 6; i++) {

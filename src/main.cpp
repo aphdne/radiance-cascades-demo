@@ -1,4 +1,5 @@
-#include "demo.h"
+#include "demo/drawing_demo.h"
+#include "demo/pong_demo.h"
 
 int main() {
   if (!DirectoryExists("res")) {
@@ -6,9 +7,9 @@ int main() {
     return 0;
   }
 
-  std::string title = "Radiance Cascades ";
-  title += VERSION_STAGE;
-  title += VERSION;
+  std::string title = "Radiance Cascades DEGREE SHOW EDITION ";
+  // title += VERSION_STAGE;
+  // title += VERSION;
 
   SetConfigFlags(FLAG_WINDOW_RESIZABLE);
   InitWindow(1600, 900, title.c_str());
@@ -16,24 +17,30 @@ int main() {
   SetTraceLogLevel(LOG_WARNING);
   rlImGuiSetup(true);
 
-  Demo demo;
+  DrawingDemo drawing;
+  PongDemo pong;
+  Demo* demo = &drawing;
 
   int screenWidth = GetScreenWidth();
   int screenHeight = GetScreenHeight();
   while (!WindowShouldClose())
   {
-    demo.processMouseInput();
-    demo.processKeyboardInput();
-    // demo.update();
+    if (IsKeyPressed(KEY_P)) {
+      (demo == &pong) ? demo = &drawing : demo = &pong;
+    }
+
+    demo->processMouseInput();
+    demo->processKeyboardInput();
+    demo->update();
     BeginDrawing();
-      demo.render();
+      demo->render();
       rlImGuiBegin();
-        demo.renderUI();
+        demo->renderUI();
       rlImGuiEnd();
       if (screenWidth != GetScreenWidth() || screenHeight != GetScreenHeight()) {
         screenWidth = GetScreenWidth();
         screenHeight = GetScreenHeight();
-        demo.resize();
+        demo->resize();
       }
     EndDrawing();
   }

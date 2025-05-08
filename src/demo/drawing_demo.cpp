@@ -1,379 +1,39 @@
-#include "demo.h"
+#include "drawing_demo.h"
 
-#define SCREENSHOT_POPUP_TIME 2 // seconds
-#define WINDOW_OPACITY 0.35
 #define DEFAULT_MIX_FACTOR 0.7
 #define DEFAULT_PROPAGATION_RATE 1.3
 #define MAX_SCENES 5
 
-Demo::Demo() {
-  // misc settings
-  jfaSteps = 512;
-  mouseLight = true;
-  drawRainbow = false;
-  timeSinceScreenshot = 0;
-
-  // scene settings
-  orbs = false;
+DrawingDemo::DrawingDemo() {
   selectedScene = 4; // pillars
-  rainbowAnimation = false;
-
-  // general lighting settings
-  srgb = true;
-  mixFactor = DEFAULT_MIX_FACTOR;
-  propagationRate = DEFAULT_PROPAGATION_RATE;
-  ambient = false;
-  ambientColor = Vector3(1.0, 1.0, 1.0);
-
-  // gi settings
-  gi = false;
-  giRayCount = 64;
-  giNoise = true;
-
-  // radiance cascades settings
-  rcRayCount = 4;
-  cascadeAmount = 5;
-  cascadeDisplayIndex = 0;
-  rcBilinear = true;
-  rcDisableMerging = false;
-  baseInterval = 0.5;
 
   // user settings
   user.mode = DRAWING;
-  userSetRandomColor();
-
-  // UI
-  skipUIRendering = false;
-  debugShowBuffers = false;
-  debug = false;
-  displayNumber = 0;
-  displayBuffer = &lastFrameBuf;
+  user.setRandomColor();
 
   ImGui::GetIO().IniFilename = NULL;
   ImGui::LoadIniSettingsFromDisk("imgui.ini");
   HideCursor();
-
-  // colorWindowData.flags |= ImGuiWindowFlags_NoResize;
-  // settingsWindowData.flags |= ImGuiWindowFlags_NoResize;
-  screenshotWindowData.flags |= ImGuiWindowFlags_NoResize;
-  screenshotWindowData.flags |= ImGuiWindowFlags_NoNav;
-  screenshotWindowData.flags |= ImGuiWindowFlags_NoInputs;
-  screenshotWindowData.flags |= ImGuiWindowFlags_NoTitleBar;
-  screenshotWindowData.open = false;
 
   // --- LOAD RESOURCES
 
   user.brushTexture = LoadTexture("res/textures/brush.png");
   user.brushSize = 0.25;
 
-  // automatically load fragment shaders in the `res/shaders` directory
-  FilePathList shaderFiles = LoadDirectoryFilesEx("res/shaders", ".frag", false);
-  for (int i = 0; i < shaderFiles.count; i++) {
-    std::string str = shaderFiles.paths[i];
-    str.erase(0, 12);
-    if (str != "broken.frag") loadShader(str);
-  }
-  UnloadDirectoryFiles(shaderFiles);
-
-  setBuffers();
-
   setScene(selectedScene);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-// void Demo::update() {
-// }
-
-// -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-void Demo::render() {
-  ClearBackground(BLACK);
-
-  // -------------------------------- shader variables
-
-  const Shader& rcShader        = shaders["rc.frag"];
-  const Shader& giShader        = shaders["gi.frag"];
-  const Shader& jfaShader       = shaders["jfa.frag"];
-  const Shader& prepJfaShader   = shaders["prepjfa.frag"];
-  const Shader& scenePrepShader = shaders["prepscene.frag"];
-  const Shader& distFieldShader = shaders["distfield.frag"];
-  const Shader& finalShader     = shaders["final.frag"];
-  #ifdef __APPLE__
-  const Shader& drawShader      = shaders["draw_macos.frag"];
-  #else
-  const Shader& drawShader      = shaders["draw.frag"];
-  #endif
-
-  // uniforms
-  Vector2 resolution = { (float)GetScreenWidth(), (float)GetScreenHeight() };
-  float   time = GetTime();
-  Vector2 mousePos = GetMousePosition();
-  int     mouseDown = (IsMouseButtonDown(0) || IsMouseButtonDown(1)) && !ImGui::GetIO().WantCaptureMouse;
-  int     rainbowAnimationInt = rainbowAnimation;
-  int     drawRainbowInt = (IsMouseButtonDown(1) || IsKeyDown(KEY_LEFT_SHIFT)) ? 0 : drawRainbow;
-  Vector4 color;
-
-  if (user.mode == DRAWING)
-    color = (IsMouseButtonDown(1) || IsKeyDown(KEY_LEFT_SHIFT)) ? Vector4{1.0, 1.0, 1.0, 1.0} : Vector4{0.0, 0.0, 0.0, 1.0};
-  else // user.mode == LIGHTING
-    color = (IsMouseButtonDown(1) || IsKeyDown(KEY_LEFT_SHIFT)) ? Vector4{0.0, 0.0, 0.0, 1.0} : ColorNormalize(user.brushColor);
-
-  // -------------------------------- scene mapping
-
-  #ifdef __APPLE__
-  Texture2D canvas = (user.mode == DRAWING) ? occlusionBuf.texture : emissionBuf.texture;
-  #endif
-
-  // drawing to emission or occlusion map depending on `user.mode`
-  BeginTextureMode((user.mode == DRAWING) ? occlusionBuf : emissionBuf);
-    BeginShaderMode(drawShader);
-      #ifdef __APPLE__
-      SetShaderValueTexture(drawShader, GetShaderLocation(drawShader, "uCanvas"), canvas);
-      #endif
-      SetShaderValue(drawShader, GetShaderLocation(drawShader, "uTime"),         &time,           SHADER_UNIFORM_FLOAT);
-      SetShaderValue(drawShader, GetShaderLocation(drawShader, "uMousePos"),     &mousePos,       SHADER_UNIFORM_VEC2);
-      SetShaderValue(drawShader, GetShaderLocation(drawShader, "uLastMousePos"), &lastMousePos,   SHADER_UNIFORM_VEC2);
-      SetShaderValue(drawShader, GetShaderLocation(drawShader, "uBrushSize"),    &user.brushSize, SHADER_UNIFORM_FLOAT);
-      SetShaderValue(drawShader, GetShaderLocation(drawShader, "uBrushColor"),   &color,          SHADER_UNIFORM_VEC4);
-      SetShaderValue(drawShader, GetShaderLocation(drawShader, "uMouseDown"),    &mouseDown,      SHADER_UNIFORM_INT);
-      SetShaderValue(drawShader, GetShaderLocation(drawShader, "uRainbow"),      &drawRainbowInt, SHADER_UNIFORM_INT);
-      DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
-    EndShaderMode();
-  EndTextureMode();
-
-  // combine occlusion & emission map to be used in JFA and lighting passes
-  // this shader is also an opportunity to add SDFs (such as the orbs)
-  BeginTextureMode(sceneBuf);
-    ClearBackground(BLANK);
-    BeginShaderMode(scenePrepShader);
-      color = (user.mode == DRAWING) ? Vector4{0.0, 0.0, 0.0, 1.0} : ColorNormalize(user.brushColor);
-      int orbsInt = orbs;
-      int mouseLightInt = mouseLight && !ImGui::GetIO().WantCaptureMouse;
-      SetShaderValueTexture(scenePrepShader, GetShaderLocation(scenePrepShader, "uOcclusionMap"),    occlusionBuf.texture);
-      SetShaderValueTexture(scenePrepShader, GetShaderLocation(scenePrepShader, "uEmissionMap"),     emissionBuf.texture);
-      SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uMousePos"),   &mousePos,            SHADER_UNIFORM_VEC2);
-      SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uBrushSize"),  &user.brushSize,      SHADER_UNIFORM_FLOAT);
-      SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uBrushColor"), &color,               SHADER_UNIFORM_VEC4);
-      SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uMouseLight"), &mouseLightInt,       SHADER_UNIFORM_INT);
-      SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uTime"),       &time,                SHADER_UNIFORM_FLOAT);
-      SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uOrbs"),       &orbsInt,             SHADER_UNIFORM_INT);
-      SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uRainbow"),    &rainbowAnimationInt, SHADER_UNIFORM_INT);
-      DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
-    EndShaderMode();
-  EndTextureMode();
-
-  // -------------------------------- jump flooding algorithm / distance field generation
-
-  // first render pass for JFA
-  // create UV mask w/ prep shader
-  BeginTextureMode(jfaBufferA);
-    ClearBackground(BLANK);
-    BeginShaderMode(prepJfaShader);
-      SetShaderValueTexture(prepJfaShader, GetShaderLocation(prepJfaShader, "uSceneMap"), sceneBuf.texture);
-      DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
-    EndShaderMode();
-  EndTextureMode();
-
-  // ping-pong buffering
-  // alternate between two buffers so that we can implement a recursive shader
-  // see https://mini.gmshaders.com/p/gm-shaders-mini-recursive-shaders-1308459
-  for (int j = jfaSteps*2; j >= 1; j /= 2) {
-    jfaBufferC = jfaBufferA;
-    jfaBufferA = jfaBufferB;
-    jfaBufferB = jfaBufferC;
-
-    BeginTextureMode(jfaBufferA);
-      ClearBackground(BLANK);
-      BeginShaderMode(jfaShader);
-        SetShaderValueTexture(jfaShader, GetShaderLocation(jfaShader, "uCanvas"), jfaBufferB.texture);
-        SetShaderValue(jfaShader, GetShaderLocation(jfaShader, "uJumpSize"), &j, SHADER_UNIFORM_INT);
-        DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
-      EndShaderMode();
-    EndTextureMode();
-  }
-
-  // write distance field to another buffer
-  // reduces strain as the cpu gets to send less data to the gpu for lighting shaders
-  BeginTextureMode(distFieldBuf);
-    ClearBackground(BLANK);
-    BeginShaderMode(distFieldShader);
-      SetShaderValueTexture(distFieldShader, GetShaderLocation(distFieldShader, "uJFA"), jfaBufferA.texture);
-      DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
-    EndShaderMode();
-  EndTextureMode();
-
-  // -------------------------------- lighting pass
-
-  int srgbInt = srgb;
-
-  // --------------- traditional GI
-
-  if (gi) {
-    int giNoiseInt = giNoise;
-    int ambientInt = ambient;
-    BeginTextureMode(radianceBufferA);
-      BeginShaderMode(giShader);
-        ClearBackground(BLANK);
-        SetShaderValueTexture(giShader, GetShaderLocation(giShader, "uDistanceField"), distFieldBuf.texture);
-        SetShaderValueTexture(giShader, GetShaderLocation(giShader, "uSceneMap"),      sceneBuf.texture);
-        SetShaderValueTexture(giShader, GetShaderLocation(giShader, "uLastFrame"),     lastFrameBuf.texture);
-        SetShaderValue(giShader, GetShaderLocation(giShader, "uAmbient"),             &ambientInt,          SHADER_UNIFORM_INT);
-        SetShaderValue(giShader, GetShaderLocation(giShader, "uAmbientColor"),        &ambientColor,        SHADER_UNIFORM_VEC3);
-        SetShaderValue(giShader, GetShaderLocation(giShader, "uRayCount"),  &giRayCount,  SHADER_UNIFORM_INT);
-        SetShaderValue(giShader, GetShaderLocation(giShader, "uSrgb"),       &srgbInt,     SHADER_UNIFORM_INT);
-        SetShaderValue(giShader, GetShaderLocation(giShader, "uNoise"),      &giNoiseInt,  SHADER_UNIFORM_INT);
-        SetShaderValue(giShader, GetShaderLocation(giShader, "uPropagationRate"),  &propagationRate, SHADER_UNIFORM_FLOAT);
-        SetShaderValue(giShader, GetShaderLocation(giShader, "uMixFactor"),  &mixFactor, SHADER_UNIFORM_FLOAT);
-        DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
-      EndShaderMode();
-    EndTextureMode();
-  } else {
-
-  // --------------- radiance cascades
-
-    if (rcBilinear) {
-      SetTextureFilter(radianceBufferA.texture, TEXTURE_FILTER_BILINEAR);
-      SetTextureFilter(radianceBufferB.texture, TEXTURE_FILTER_BILINEAR);
-      SetTextureFilter(radianceBufferC.texture, TEXTURE_FILTER_BILINEAR);
-    } else {
-      SetTextureFilter(radianceBufferA.texture, TEXTURE_FILTER_POINT);
-      SetTextureFilter(radianceBufferB.texture, TEXTURE_FILTER_POINT);
-      SetTextureFilter(radianceBufferC.texture, TEXTURE_FILTER_POINT);
-    }
-
-  // --------------- direct lighting pass
-
-    int directDisplayIndex = 0;
-    srgbInt = 0;
-    int uMixFactor = 0;
-    int rcDisableMergingInt = 0;
-    int ambientInt = 0;
-    for (int i = cascadeAmount; i >= 0; i--) {
-      radianceBufferC = radianceBufferA;
-      radianceBufferA = radianceBufferB;
-      radianceBufferB = radianceBufferC;
-
-      BeginTextureMode(radianceBufferA);
-        BeginShaderMode(rcShader);
-          ClearBackground(BLANK);
-          SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uDistanceField"),  distFieldBuf.texture);
-          SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uSceneMap"),       sceneBuf.texture);
-          SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uLastPass"),       radianceBufferC.texture);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uAmbient"),             &ambientInt,          SHADER_UNIFORM_INT);
-          // SetShaderValue(rcShader, GetShaderLocation(rcShader, "uAmbientColor"),        &ambientColor,        SHADER_UNIFORM_VEC3);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uResolution"),          &resolution,          SHADER_UNIFORM_VEC2);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uBaseRayCount"),        &rcRayCount,          SHADER_UNIFORM_INT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uBaseInterval"),        &baseInterval,        SHADER_UNIFORM_FLOAT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uDisableMerging"),      &rcDisableMergingInt, SHADER_UNIFORM_INT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uCascadeDisplayIndex"), &directDisplayIndex,  SHADER_UNIFORM_INT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uCascadeIndex"),        &i,                   SHADER_UNIFORM_INT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uCascadeAmount"),       &cascadeAmount,       SHADER_UNIFORM_INT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uSrgb"),                &srgbInt,             SHADER_UNIFORM_INT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uMixFactor"),           &uMixFactor,          SHADER_UNIFORM_FLOAT);
-          DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
-        EndShaderMode();
-      EndTextureMode();
-    }
-
-    BeginTextureMode(lastFrameBuf);
-      DrawTextureRec(radianceBufferA.texture, {0, 0.0, (float)GetScreenWidth(), (float)GetScreenHeight()}, {0.0, 0.0}, WHITE);
-    EndTextureMode();
-
-  // --------------- indirect lighting pass (one bounce)
-    rcDisableMergingInt = rcDisableMerging;
-    srgbInt = srgb;
-    ambientInt = ambient;
-    for (int i = cascadeAmount; i >= 0; i--) {
-      radianceBufferC = radianceBufferA;
-      radianceBufferA = radianceBufferB;
-      radianceBufferB = radianceBufferC;
-
-      BeginTextureMode(radianceBufferA);
-        BeginShaderMode(rcShader);
-          ClearBackground(BLANK);
-          SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uDistanceField"),  distFieldBuf.texture);
-          SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uSceneMap"),       sceneBuf.texture);
-          SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uDirectLighting"), lastFrameBuf.texture);
-          SetShaderValueTexture(rcShader, GetShaderLocation(rcShader, "uLastPass"),       radianceBufferC.texture);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uAmbient"),             &ambientInt,          SHADER_UNIFORM_INT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uAmbientColor"),        &ambientColor,        SHADER_UNIFORM_VEC3);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uResolution"),          &resolution,          SHADER_UNIFORM_VEC2);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uBaseRayCount"),        &rcRayCount,          SHADER_UNIFORM_INT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uBaseInterval"),        &baseInterval,        SHADER_UNIFORM_FLOAT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uDisableMerging"),      &rcDisableMergingInt, SHADER_UNIFORM_INT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uCascadeDisplayIndex"), &cascadeDisplayIndex, SHADER_UNIFORM_INT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uCascadeIndex"),        &i,                   SHADER_UNIFORM_INT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uCascadeAmount"),       &cascadeAmount,       SHADER_UNIFORM_INT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uSrgb"),                &srgbInt,             SHADER_UNIFORM_INT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uPropagationRate"),     &propagationRate,     SHADER_UNIFORM_FLOAT);
-          SetShaderValue(rcShader, GetShaderLocation(rcShader, "uMixFactor"),           &mixFactor,           SHADER_UNIFORM_FLOAT);
-          DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
-        EndShaderMode();
-      EndTextureMode();
-    }
-  }
-
-  // -------------------------------- save to lastFrameBuf for next frame (for traditional GI) & display to main framebuffer
-
-  if (gi) {
-    BeginTextureMode(lastFrameBuf);
-      DrawTextureRec(radianceBufferA.texture, {0, 0.0, (float)GetScreenWidth(), (float)GetScreenHeight()}, {0.0, 0.0}, WHITE);
-    EndTextureMode();
-  }
-
-  Rectangle rcRect = { 0.0, 0.0, (float)GetScreenWidth(), (float)GetScreenHeight() };
-  Rectangle giRect = { 0.0, (float)GetScreenHeight(), (float)GetScreenWidth(), -(float)GetScreenHeight() };
-  DrawTextureRec(
-    (gi) ? lastFrameBuf.texture : radianceBufferA.texture,
-    (gi) ? giRect : rcRect,
-    { 0.0, 0.0 },
-    WHITE
-  );
-
-  if (!mouseLight) {
-    DrawTextureEx(user.brushTexture,
-                  Vector2{ (float)(GetMouseX() - user.brushTexture.width  / 2 * user.brushSize),
-                           (float)(GetMouseY() - user.brushTexture.height / 2 * user.brushSize) },
-                  0.0,
-                  user.brushSize,
-                  Color{ 0, 0, 0, 128} );
-  }
-}
-
-// -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-void Demo::renderUI() {
-  if (debug) ImGui::ShowDemoWindow();
-  // dont draw our custom cursor if we are mousing over the UI
-  ImGuiIO& io = ImGui::GetIO();
-  if (!io.WantCaptureMouse) {
-    ImGui::SetMouseCursor(ImGuiMouseCursor_None);
+void DrawingDemo::renderUI() {
+  Demo::renderUI();
+  if (!ImGui::GetIO().WantCaptureMouse)
     DrawTextureEx(cursorTex,
                   Vector2{ (float)(GetMouseX() - cursorTex.width / 2 * CURSOR_SIZE),
                            (float)(GetMouseY() - cursorTex.height/ 2 * CURSOR_SIZE) },
                   0.0,
                   CURSOR_SIZE,
                   WHITE);
-  }
-
-  if (screenshotWindowData.open) {
-    #define WIDTH 135
-    #define HEIGHT 25
-    ImGui::SetNextWindowBgAlpha(WINDOW_OPACITY); // Transparent background
-    ImGui::SetNextWindowPos({(float)GetScreenWidth()/2 - WIDTH/2, (float)GetScreenHeight()/2 - HEIGHT/2});
-    ImGui::SetNextWindowSize({WIDTH, HEIGHT});
-    if (ImGui::Begin("Screenshot", &screenshotWindowData.open, screenshotWindowData.flags)) {
-      ImGui::Text("Screenshot taken!");
-      ImGui::End();
-    }
-    timeSinceScreenshot += GetFrameTime();
-    if (timeSinceScreenshot > SCREENSHOT_POPUP_TIME)
-      screenshotWindowData.open = false;
-  }
-
-  if (skipUIRendering) return;
-
   // imgui's default BulletTextWrapped() function does not wrap
   #define BULLET(x) ImGui::Bullet(); ImGui::TextWrapped(x)
   #define BASE_INTERVAL_SLIDER() if (ImGui::SmallButton("reset base interval")) \
@@ -417,7 +77,7 @@ void Demo::renderUI() {
   if (!ImGui::Begin("Colour Picker", &colorWindowData.open, colorWindowData.flags)) {
     ImGui::End();
   } else {
-    if (ImGui::SmallButton("set r(a)ndom colour")) userSetRandomColor();
+    if (ImGui::SmallButton("set r(a)ndom colour")) user.setRandomColor();
     ImGui::Checkbox("draw rainbow", &drawRainbow);
 
     Vector4 col4 = ColorNormalize(user.brushColor);
@@ -533,7 +193,7 @@ void Demo::renderUI() {
         BULLET("F2 to"); ImGui::SameLine(); if (ImGui::SmallButton("save a screenshot")) saveCanvas(); ImGui::SameLine(); ImGui::TextWrapped("of the canvas");
         BULLET("shift-R to reset UI window locations");
         BULLET("shift-R to"); ImGui::SameLine(); if (ImGui::SmallButton("reset the UI")) ImGui::LoadIniSettingsFromDisk("imgui.ini");
-        BULLET("A to"); ImGui::SameLine(); if (ImGui::SmallButton("switch to a random colour")) userSetRandomColor();
+        BULLET("A to"); ImGui::SameLine(); if (ImGui::SmallButton("switch to a random colour")) user.setRandomColor();
         ImGui::EndTabItem();
       }
       if (ImGui::BeginTabItem("Tutorial")) {
@@ -683,33 +343,21 @@ void Demo::renderUI() {
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void Demo::processKeyboardInput() {
-  if (ImGui::GetIO().WantCaptureMouse) return;
+void DrawingDemo::processKeyboardInput() {
+  Demo::processKeyboardInput();
 
   // switching modes
   if (IsKeyPressed(KEY_ONE))   user.mode = DRAWING;
   if (IsKeyPressed(KEY_TWO))   user.mode = LIGHTING;
   if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_TAB)) user.mode = (user.mode == DRAWING) ? LIGHTING : DRAWING;
 
-  // misc
-  if (IsKeyPressed(KEY_GRAVE)) debug = !debug;
-  if (IsKeyPressed(KEY_F1))    skipUIRendering = !skipUIRendering;
-  if (IsKeyPressed(KEY_F2))    saveCanvas();
-
   // setting settings
-  if (IsKeyDown(KEY_A)) userSetRandomColor();
+  if (IsKeyDown(KEY_A)) user.setRandomColor();
   if (IsKeyPressed(KEY_C) || IsKeyPressed(KEY_BACKSPACE) || IsKeyPressed(KEY_DELETE)) setScene(-1); // clear scene depending on mode
   if (IsKeyPressed(KEY_S)) setScene(selectedScene++);
-  if (IsKeyPressed(KEY_F)) {
-    ToggleFullscreen();
-    resize();
-  }
+
   if (IsKeyDown(KEY_R)) {
-    if (IsKeyDown(KEY_LEFT_CONTROL)) { // reload shaders
-      std::cout << "Reloading shaders." << std::endl;
-      for (auto const& [key, val] : shaders)
-        loadShader(key);
-    } else if (IsKeyDown(KEY_LEFT_SHIFT)) // reload default ui positions
+    if (IsKeyDown(KEY_LEFT_SHIFT)) // reload default ui positions
       ImGui::LoadIniSettingsFromDisk("imgui.ini");
     else
       setScene(selectedScene); // reload scene
@@ -718,9 +366,8 @@ void Demo::processKeyboardInput() {
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void Demo::processMouseInput() {
-  // we do not want to be affecting the scene when we're clicking on the UI
-  if (ImGui::GetIO().WantCaptureMouse) return;
+void DrawingDemo::processMouseInput() {
+  Demo::processMouseInput();
 
   user.brushSize += GetMouseWheelMove() / 100;
   if      (user.brushSize < 0.05) user.brushSize = 0.05;
@@ -735,100 +382,22 @@ void Demo::processMouseInput() {
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void Demo::resize() {
-  setBuffers();
+void DrawingDemo::resize() {
+  Demo::resize();
   setScene(selectedScene);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void Demo::setBuffers() {
-  UnloadRenderTexture(jfaBufferA);
-  UnloadRenderTexture(jfaBufferB);
-  UnloadRenderTexture(jfaBufferC);
-  UnloadRenderTexture(radianceBufferA);
-  UnloadRenderTexture(radianceBufferB);
-  UnloadRenderTexture(radianceBufferC);
-  UnloadRenderTexture(sceneBuf);
-  UnloadRenderTexture(distFieldBuf);
-  UnloadRenderTexture(lastFrameBuf);
-  UnloadRenderTexture(occlusionBuf);
-  UnloadRenderTexture(emissionBuf);
-
-  // change bit depth for jfaBufferA, B, & C so that we can encode texture coordinates without losing data
-  // default Raylib FBOs have a bit depth of 8 per channel, which would only cover for a window of maximum size 255x255
-  // we can also save some memory by reducing bit depth of buffers to what is strictly required
-  auto changeBitDepth = [](RenderTexture2D &buffer, PixelFormat pixformat) {
-    rlEnableFramebuffer(buffer.id);
-      rlUnloadTexture(buffer.texture.id);
-      buffer.texture.id = rlLoadTexture(NULL, GetScreenWidth(), GetScreenHeight(), pixformat, 1);
-      buffer.texture.width = GetScreenWidth();
-      buffer.texture.height = GetScreenHeight();
-      buffer.texture.format = pixformat;
-      buffer.texture.mipmaps = 1;
-      rlFramebufferAttach(buffer.id, buffer.texture.id, RL_ATTACHMENT_COLOR_CHANNEL0, RL_ATTACHMENT_TEXTURE2D, 0);
-    rlDisableFramebuffer();
-  };
-
-  jfaBufferA      = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
-  jfaBufferB      = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
-  jfaBufferC      = jfaBufferA;
-  radianceBufferA = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
-  radianceBufferB = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
-  radianceBufferC = radianceBufferA;
-  sceneBuf        = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
-  distFieldBuf    = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
-  lastFrameBuf    = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
-  emissionBuf     = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
-  occlusionBuf    = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
-
-  changeBitDepth(jfaBufferA,   PIXELFORMAT_UNCOMPRESSED_R32G32B32A32);
-  changeBitDepth(jfaBufferB,   PIXELFORMAT_UNCOMPRESSED_R32G32B32A32);
-  changeBitDepth(jfaBufferC,   PIXELFORMAT_UNCOMPRESSED_R32G32B32A32);
-  changeBitDepth(sceneBuf,     PIXELFORMAT_UNCOMPRESSED_R5G5B5A1);
-  changeBitDepth(distFieldBuf, PIXELFORMAT_UNCOMPRESSED_R16);
-  changeBitDepth(occlusionBuf, PIXELFORMAT_UNCOMPRESSED_GRAY_ALPHA);
-  changeBitDepth(emissionBuf,  PIXELFORMAT_UNCOMPRESSED_R5G5B5A1);
-
-  BeginTextureMode(occlusionBuf);
-    ClearBackground(WHITE);
-  EndTextureMode();
-
-  BeginTextureMode(emissionBuf);
-    ClearBackground(BLACK);
-  EndTextureMode();
-}
-
-// -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-void Demo::userSetRandomColor() {
-  user.brushColor = ColorFromNormalized(Vector4{(std::sin(static_cast<float>(GetTime()))   + 1) / 2,
-                                          (std::cos(static_cast<float>(GetTime()))   + 1) / 2,
-                                          (std::sin(static_cast<float>(GetTime())*2) + 1) / 2,
-                                  1.0 });
-}
-
-void Demo::loadShader(std::string shader) {
-  std::string path = "res/shaders/" + shader;
-  Shader s = LoadShader(0, path.c_str());
-  if (!IsShaderValid(s)) {
-    std::cout << "ERR: '" << shader << "' is broken." << std::endl;
-    UnloadShader(s);
-    s = LoadShader("res/shaders/default.vert", "res/shaders/broken.frag");
-  } else {
-    std::cout << "Loaded '" << shader << "' successfully." << std::endl;
-  }
-  shaders[shader] = s;
-}
-
 #define DRAW_TEXTURE_STRETCH(file) DrawTexturePro(LoadTexture(file), Rectangle{0, 0, 800, -600}, Rectangle{0, 0, static_cast<float>(GetScreenWidth()), static_cast<float>(GetScreenHeight())}, Vector2{0, 0}, 0.0, WHITE);
 
 // NOTE: negative numbers are not selectable by the user
-void Demo::setScene(int scene) {
+void DrawingDemo::setScene(int scene) {
   if (scene > MAX_SCENES) {
     selectedScene = 0;
     scene = 0;
   }
+  selectedScene = scene;
 
   // some scenes are drawn by reading an image file, others are drawn directly via shader
   #ifdef __APPLE__
@@ -960,21 +529,73 @@ void Demo::setScene(int scene) {
   }
 }
 
-void Demo::saveCanvas() {
-  Image image = LoadImageFromTexture((gi) ? lastFrameBuf.texture : radianceBufferA.texture);
-  if (gi) ImageFlipVertical(&image);
+void DrawingDemo::prepScene() {
+  ClearBackground(BLACK);
 
-  if (!DirectoryExists("screenshots"))
-    MakeDirectory("screenshots");
+  // -------------------------------- shader variables
 
-  std::string path = "screenshots/screenshot0.png";
-  for (int i = 0; i < 100; i++) {
-    path = "screenshots/screenshot" + std::to_string(i) + ".png";
-    if (!FileExists(path.c_str())) break;
-  }
+  const Shader& scenePrepShader = shaders["prepscene.frag"];
+  #ifdef __APPLE__
+  const Shader& drawShader      = shaders["draw_macos.frag"];
+  #else
+  const Shader& drawShader      = shaders["draw.frag"];
+  #endif
 
-  ExportImage(image, path.c_str());
+  // uniforms
+  float   time = GetTime();
+  Vector2 mousePos = GetMousePosition();
+  int     mouseDown = (IsMouseButtonDown(0) || IsMouseButtonDown(1)) && !ImGui::GetIO().WantCaptureMouse;
+  int     rainbowAnimationInt = rainbowAnimation;
+  int     drawRainbowInt = (IsMouseButtonDown(1) || IsKeyDown(KEY_LEFT_SHIFT)) ? 0 : drawRainbow;
+  Vector4 color;
 
-  timeSinceScreenshot = 0;
-  screenshotWindowData.open = true;
+  if (user.mode == DRAWING)
+    color = (IsMouseButtonDown(1) || IsKeyDown(KEY_LEFT_SHIFT)) ? Vector4{1.0, 1.0, 1.0, 1.0} : Vector4{0.0, 0.0, 0.0, 1.0};
+  else // user.mode == LIGHTING
+    color = (IsMouseButtonDown(1) || IsKeyDown(KEY_LEFT_SHIFT)) ? Vector4{0.0, 0.0, 0.0, 1.0} : ColorNormalize(user.brushColor);
+
+  // -------------------------------- scene mapping
+
+  #ifdef __APPLE__
+  Texture2D canvas = (user.mode == DRAWING) ? occlusionBuf.texture : emissionBuf.texture;
+  #endif
+
+  // drawing to emission or occlusion map depending on `user.mode`
+  BeginTextureMode((user.mode == DRAWING) ? occlusionBuf : emissionBuf);
+    BeginShaderMode(drawShader);
+      #ifdef __APPLE__
+      SetShaderValueTexture(drawShader, GetShaderLocation(drawShader, "uCanvas"), canvas);
+      #endif
+      SetShaderValue(drawShader, GetShaderLocation(drawShader, "uTime"),         &time,           SHADER_UNIFORM_FLOAT);
+      SetShaderValue(drawShader, GetShaderLocation(drawShader, "uMousePos"),     &mousePos,       SHADER_UNIFORM_VEC2);
+      SetShaderValue(drawShader, GetShaderLocation(drawShader, "uLastMousePos"), &lastMousePos,   SHADER_UNIFORM_VEC2);
+      SetShaderValue(drawShader, GetShaderLocation(drawShader, "uBrushSize"),    &user.brushSize, SHADER_UNIFORM_FLOAT);
+      SetShaderValue(drawShader, GetShaderLocation(drawShader, "uBrushColor"),   &color,          SHADER_UNIFORM_VEC4);
+      SetShaderValue(drawShader, GetShaderLocation(drawShader, "uMouseDown"),    &mouseDown,      SHADER_UNIFORM_INT);
+      SetShaderValue(drawShader, GetShaderLocation(drawShader, "uRainbow"),      &drawRainbowInt, SHADER_UNIFORM_INT);
+      DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
+    EndShaderMode();
+  EndTextureMode();
+
+  // combine occlusion & emission map to be used in JFA and lighting passes
+  // this shader is also an opportunity to add SDFs (such as the orbs)
+  BeginTextureMode(sceneBuf);
+    ClearBackground(BLANK);
+    BeginShaderMode(scenePrepShader);
+      color = (user.mode == DRAWING) ? Vector4{0.0, 0.0, 0.0, 1.0} : ColorNormalize(user.brushColor);
+      int orbsInt = orbs;
+      int mouseLightInt = mouseLight && !ImGui::GetIO().WantCaptureMouse;
+      SetShaderValueTexture(scenePrepShader, GetShaderLocation(scenePrepShader, "uOcclusionMap"),    occlusionBuf.texture);
+      SetShaderValueTexture(scenePrepShader, GetShaderLocation(scenePrepShader, "uEmissionMap"),     emissionBuf.texture);
+      SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uMousePos"),   &mousePos,            SHADER_UNIFORM_VEC2);
+      SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uBrushSize"),  &user.brushSize,      SHADER_UNIFORM_FLOAT);
+      SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uBrushColor"), &color,               SHADER_UNIFORM_VEC4);
+      SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uMouseLight"), &mouseLightInt,       SHADER_UNIFORM_INT);
+      SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uTime"),       &time,                SHADER_UNIFORM_FLOAT);
+      SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uOrbs"),       &orbsInt,             SHADER_UNIFORM_INT);
+      SetShaderValue(scenePrepShader, GetShaderLocation(scenePrepShader, "uRainbow"),    &rainbowAnimationInt, SHADER_UNIFORM_INT);
+      DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
+    EndShaderMode();
+  EndTextureMode();
+
 }
