@@ -1,8 +1,6 @@
-# Radiance Cascades Demo
-
-![Penumbra](penumbra.png)
-
-2D radiance cascades implementation via Raylib & CMake.
+<p align="center">
+  <img src="penumbra.png" width=50% />
+</p>
 
 ### Setup
 
